@@ -8,7 +8,7 @@ from db import Database
 from edf import EDF
 from wm_lsb import LSBEmbedder
 from wm_de import DEEmbedder
-from wm_pee import PEEEmbedder
+from wm_pee import NeighorsPEE, SiblingChannelPEE
 from wm_itb import ITBEmbedder
 import util
 
@@ -17,7 +17,7 @@ DEFAULT_KEY = "ВечностьПахнетНефтью"
 
 def make_parser():        
     parser = ArgumentParser(description="Medical timeseries watermarking tool.")
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-v", "--verbose", action="store_true", dest="_debug")
     subp = parser.add_subparsers(required=True)
 
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
@@ -67,17 +67,26 @@ def make_parser():
 
 
 def add_common_args(p):
-    p.add_argument("-d", "--data-file", dest="data_file", type=Path)
-    p.add_argument("-k", "--key", default=DEFAULT_KEY)
+    # Common WM params.
+    p.add_argument("-d", "--data-file", type=Path, dest="data_file")
     p.add_argument("-c", "--channel", type=int, default=-1)
-    p.add_argument("-a", "--algo", choices=("lsb", "de", "pee", "itb"), default="lsb")
-    p.add_argument("-s", "--shuffle", action="store_true")
-    p.add_argument("-C", "--contiguous", action="store_false")
-    p.add_argument("-r", "--redundancy", type=int, default=1)
-    p.add_argument("-b", "--block-len", dest="block_len", type=int, default=1)
-    p.add_argument("--de-shift", dest="de_shift", type=int, default=1)
-    p.add_argument("--de-rand-shift", dest="de_rand_shift", action="store_true")
-    p.add_argument("--de-skip", dest="de_skip", action="store_true")
+    p.add_argument("-a", "--algo", choices=("lsb", "de", "pee-n", "pee-c", "itb"), default="lsb")
+
+    # Common embedder params.
+    p.add_argument("-k", "--key", default=DEFAULT_KEY, dest="_key")
+    p.add_argument("-s", "--shuffle", action="store_true", dest="_shuffle")
+    p.add_argument("-C", "--non-contiguous", action="store_false", dest="_contiguous")
+    p.add_argument("-r", "--redundancy", type=int, dest="_redundancy")
+    p.add_argument("-b", "--block-len", type=int, dest="_block_len")
+
+    # DE params.
+    p.add_argument("--de-shift", type=int, dest="_de_shift")
+    p.add_argument("--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift")
+    p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
+
+    # PEE params.
+    p.add_argument("--pee-neigbors", type=int, dest="_pee_neigbors")
+    p.add_argument("--pee-ref-channel", type=int, dest="_pee_ref_channel")
 
 
 def rand_bytes(args):
@@ -98,27 +107,19 @@ def add_noise(args):
 
 
 def wm(args):
-    wm_params = {
-        "key": args.key,
-        "shuffle": args.shuffle,
-        "contiguous": args.contiguous,
-        "redundancy": args.redundancy,
-        "block_len": args.block_len,
-        "debug": args.verbose,
-    }
-        
     if args.algo == "lsb":
         wm_class = LSBEmbedder
     elif args.algo == "de":
         wm_class = DEEmbedder
-        wm_params["de_shift"] = args.de_shift
-        wm_params["de_rand_shift"] = args.de_rand_shift
-        wm_params["de_skip"] = args.de_skip
-    elif args.algo == "pee":
-        wm_class = PEEEmbedder
+    elif args.algo == "pee-n":
+        wm_class = NeighorsPEE
+    elif args.algo == "pee-c":
+        wm_class = SiblingChannelPEE
     elif args.algo == "itb":
         wm_class = ITBEmbedder
-        
+
+    wm_params = {k[1:]: v for k, v in vars(args).items()
+        if k.startswith("_") and v is not None}
     worker = wm_class(**wm_params)
     db = Database()
     if args.data_file:
