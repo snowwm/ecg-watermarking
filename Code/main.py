@@ -9,6 +9,7 @@ from edf import EDF
 from wm_lsb import LSBEmbedder
 from wm_de import DEEmbedder
 from wm_pee import PEEEmbedder
+from wm_itb import ITBEmbedder
 import util
 
 DEFAULT_KEY = "ВечностьПахнетНефтью"
@@ -69,7 +70,7 @@ def add_common_args(p):
     p.add_argument("-d", "--data-file", dest="data_file", type=Path)
     p.add_argument("-k", "--key", default=DEFAULT_KEY)
     p.add_argument("-c", "--channel", type=int, default=-1)
-    p.add_argument("-a", "--algo", choices=("lsb", "de", "pee"), default="de")
+    p.add_argument("-a", "--algo", choices=("lsb", "de", "pee", "itb"), default="lsb")
     p.add_argument("-s", "--shuffle", action="store_true")
     p.add_argument("-C", "--contiguous", action="store_false")
     p.add_argument("-r", "--redundancy", type=int, default=1)
@@ -115,6 +116,8 @@ def wm(args):
         wm_params["de_skip"] = args.de_skip
     elif args.algo == "pee":
         wm_class = PEEEmbedder
+    elif args.algo == "itb":
+        wm_class = ITBEmbedder
         
     worker = wm_class(**wm_params)
     db = Database()
