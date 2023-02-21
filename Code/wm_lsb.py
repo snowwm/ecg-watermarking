@@ -2,17 +2,19 @@ from wm import WMBase, np
             
 
 class LSBEmbedder(WMBase):
-    def __init__(self, **kwargs):
+    def __init__(self, lsb_lowest_bit=0, **kwargs):
         super().__init__(**kwargs)
+        self.lsb_lowest_bit = lsb_lowest_bit
         
     def check_range(self):
+        hi_bit = self.lsb_lowest_bit + self.block_len
         if np.iinfo(self.container.dtype).min == 0:
             # Unsigned carrier
             min = 0
-            max = 2**self.block_len - 1
+            max = 2**hi_bit - 1
         else:
-            min = 2**(self.block_len - 1) * -1
-            max = 2**(self.block_len - 1) - 1
+            min = 2**(hi_bit - 1) * -1
+            max = 2**(hi_bit - 1) - 1
         
         return min >= self.carr_range[0] and max <= self.carr_range[1]
     
@@ -27,10 +29,11 @@ class LSBEmbedder(WMBase):
         # which should be small enough.
         
         for i in range(wm.shape[1]):
+            j = self.lsb_lowest_bit + i
             coords_0 = coords[wm[:, i] == 0]
-            self.carrier[coords_0] &= ~(1 << i)
+            self.carrier[coords_0] &= ~(1 << j)
             coords_1 = coords[wm[:, i] == 1]
-            self.carrier[coords_1] |= (1 << i)
+            self.carrier[coords_1] |= (1 << j)
             
         return wm.size
             
@@ -38,7 +41,8 @@ class LSBEmbedder(WMBase):
         carr = self.carrier[coords]
         
         for i in range(wm.shape[1]):
-            wm[:, i] = (carr & (1 << i)) >> i
+            j = self.lsb_lowest_bit + i
+            wm[:, i] = (carr & (1 << j)) >> j
             
         return wm.size
     

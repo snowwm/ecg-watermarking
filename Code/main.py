@@ -79,6 +79,9 @@ def add_common_args(p):
     p.add_argument("-r", "--redundancy", type=int, dest="_redundancy")
     p.add_argument("-b", "--block-len", type=int, dest="_block_len")
 
+    # LSB params.
+    p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
+
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
     p.add_argument("--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift")
