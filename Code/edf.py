@@ -102,15 +102,15 @@ class EDF:
     def embed_watermark(self, embedder, db):
         print(f"\nEmbedding watermark...")
         emb_metrics = Metrics("embed")
+        embedder.set_edf(self)
         
         for c in self.used_channels:
             print(f"Signal {c}, {self.signal_headers[c]['label']!r}:")
-            s = self.signals[c]
             rng = self.signal_range(c)
-            embedder.set_carrier(s, rng)
+            embedder.set_container(self.signals[c], rng)
             self.signals[c] = embedder.embed()
             
-            emb_metrics.add(embedder.carrier, s, rng[1] - rng[0] + 1)
+            emb_metrics.add(embedder.carrier, embedder.container, rng[1] - rng[0] + 1)
             emb_metrics.print_last()
             dbc = db.new_ctx()
             dbc.set_props(channel=c, **self.signal_info(c))
@@ -128,14 +128,15 @@ class EDF:
         res = []
         extr_metrics = Metrics("extract")
         rest_metrics = Metrics("restore")
+        extractor.set_edf(self)
         
         for c in self.used_channels:
             print(f"Signal {c}, {self.signal_headers[c]['label']!r}:")
             s = self.signals[c]
             rng = self.signal_range(c)
-            extractor.set_filled_carrier(s)
+            extractor.set_carrier(s)
             extracted = extractor.extract()
-            self.signals[c] = extractor.restored_carrier
+            self.signals[c] = extractor.restored
             res.append(extracted)
             dbc = db.new_ctx()
             dbc.set_props(channel=c, **self.signal_info(c))

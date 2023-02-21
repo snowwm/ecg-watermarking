@@ -1,4 +1,6 @@
-from wm import WMBase, np
+import numpy as np
+
+from wm import WMBase
             
 
 class DEEmbedder(WMBase):
@@ -31,8 +33,8 @@ class DEEmbedder(WMBase):
         c1 = coords[:, 0]
         c2 = coords[:, 1]
         # Prevent overflow by using a "big" type.
-        x1 = self.carrier[c1].astype(np.int64)
-        x2 = self.carrier[c2].astype(np.int64)
+        x1 = self.container[c1].astype(np.int64)
+        x2 = self.container[c2].astype(np.int64)
         n = self.de_n
         y1 = (n + 1) * x1 - n * x2
         y2 = (n + 1) * x2 - n * x1
@@ -53,8 +55,8 @@ class DEEmbedder(WMBase):
         w = np.packbits(wm, axis=1, bitorder="little").reshape(-1).astype(np.int8)
         w += 1
         w[w > n] -= 2 * n + 1
-        self.filled_carrier[c1[embeddable]] = y1e + w
-        self.filled_carrier[c2[embeddable]] = y2e
+        self.carrier[c1[embeddable]] = y1e + w
+        self.carrier[c2[embeddable]] = y2e
         
         if x1n.size > 0:
             if not self.de_skip:
@@ -69,15 +71,15 @@ class DEEmbedder(WMBase):
             # One of (v1, v2) must fit into the range.
             if not (v1_fits | v2_fits).all():
                 raise Exception("Too small carrier range for this block_len")
-            self.filled_carrier[c1[~embeddable]] = np.where(v1_fits, v1, v2)
+            self.carrier[c1[~embeddable]] = np.where(v1_fits, v1, v2)
         
         return wm.size
             
     def extract_chunk(self, wm, coords):
         c1 = coords[:, 0]
         c2 = coords[:, 1]
-        y1 = self.filled_carrier[c1].astype(np.int64)
-        y2 = self.filled_carrier[c2].astype(np.int64)
+        y1 = self.carrier[c1].astype(np.int64)
+        y2 = self.carrier[c2].astype(np.int64)
         n = self.de_n
         w = (y1 - y2) % (2 * n + 1)
         
@@ -100,7 +102,7 @@ class DEEmbedder(WMBase):
         y1 -= w
         x1 = np.round(self.de_k1 * y1 + self.de_k2 * y2)
         x2 = np.round(self.de_k2 * y1 + self.de_k1 * y2)
-        self.restored_carrier[c1[filled]] = x1
-        self.restored_carrier[c2[filled]] = x2
+        self.restored[c1[filled]] = x1
+        self.restored[c2[filled]] = x2
         
         return wm.size 

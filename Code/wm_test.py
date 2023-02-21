@@ -58,7 +58,7 @@ def test(cases, cls):
         wm = util.to_bits(c.pop("wm"))
         
         worker = cls(**c, debug=False)
-        worker.set_carrier(carr)
+        worker.set_container(carr)
         worker.set_watermark(wm)
         
         c.pop("key")
@@ -71,7 +71,7 @@ def test(cases, cls):
             
             if cls is DEEmbedder:
                 max_err = worker.de_n * 2
-                assert abs(worker.restored_carrier - carr).max() <= max_err
+                assert abs(worker.restored - carr).max() <= max_err
               
             if not worker.shuffle:
                 w2 = worker.extract()
@@ -79,14 +79,14 @@ def test(cases, cls):
                 
             print("OK")
         except Exception as e:
-            if e.args != ("Insufficient carrier length or range for this watermark",):
+            if e.args != ("Insufficient container length or range for this watermark",):
                 raise
             print("Skipped")
 
 def test_manual():
     wm = util.to_bits("a")
     e = DEEmbedder(key="ab", contiguous=False, block_len=1, redundancy=1, shuffle=False, debug=True)
-    e.set_carrier(range(20))
+    e.set_container(range(20))
     e.set_watermark(wm)
     e.embed()
     print()

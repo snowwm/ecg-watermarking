@@ -24,22 +24,25 @@ class WMBase:
     def rng(self):
         return np.random.default_rng(self.key)
     
-    def set_carrier(self, carr, carr_range=None):
-        self.carrier = np.array(carr)
+    def set_container(self, carr, carr_range=None):
+        self.container = np.array(carr)
         if carr_range is None:
-            inf = np.iinfo(self.carrier.dtype)
+            inf = np.iinfo(self.container.dtype)
             carr_range = (inf.min, inf.max)
         self.carr_range = carr_range
         
         if not self.check_range():
-            raise Exception("Insufficient carrier range")
+            raise Exception("Insufficient container range")
     
-    def set_filled_carrier(self, carr):
-        self.filled_carrier = np.array(carr)
+    def set_carrier(self, carr):
+        self.carrier = np.array(carr)
     
     def set_watermark(self, wm):
         self.watermark = np.array(wm)
-        
+
+    def set_edf(self, edf):
+        self.edf = edf
+
     def preprocess_wm(self, wm):
         if self.redundancy > 1:
             wm = np.repeat(wm, self.redundancy)
@@ -70,38 +73,35 @@ class WMBase:
         return wm
     
     def embed(self):
-        self.filled_carrier = self.carrier.copy()
-        coords = self.get_coords(self.carrier)
+        self.carrier = self.container.copy()
+        coords = self.get_coords(self.container)
         
         self.debug("Orig wm", self.watermark)
         wm = self.preprocess_wm(self.watermark)
         self.debug("Prep wm", wm)
            
-        bits_done = 0
-        bits_remaining = len(wm)
+        wm_done = 0
+        wm_need = len(wm)
         coords_done = 0
         
-        while bits_remaining > 0:
-            chunk = self.make_chunk(wm, bits_done, bits_remaining)
-            coords_end = coords_done + len(chunk)
-            if coords_end > len(coords):
-                raise Exception("Insufficient carrier length or range for this watermark")
+        while wm_need > 0:
+            wm_chunk = self.make_wm_chunk(wm, wm_done, wm_need)
+            coords_chunk = self.make_coords_chunk(coords, coords_done, len(wm_chunk))
+            if coords_chunk is None:
+                raise Exception("Insufficient container length or range for this watermark")
             
-            coords_chunk = coords[coords_done:coords_end]
-            self.debug("Coords chunk", coords_chunk)
-            
-            bd = self.embed_chunk(chunk, coords_chunk)
-            coords_done = coords_end
-            bits_done += bd
-            bits_remaining -= bd
+            done = self.embed_chunk(wm_chunk, coords_chunk)
+            coords_done += len(coords_chunk)
+            wm_done += done
+            wm_need -= done
         
-        self.debug("Orig carr", self.carrier, "carr")
-        self.debug("Fill carr", self.filled_carrier, "carr")
-        return self.filled_carrier
+        self.debug("Orig carr", self.container, "carr")
+        self.debug("Fill carr", self.carrier, "carr")
+        return self.carrier
     
     def extract(self):
-        self.restored_carrier = self.filled_carrier.copy()
-        coords = self.get_coords(self.filled_carrier)
+        self.restored = self.carrier.copy()
+        coords = self.get_coords(self.carrier)
         
         if self.wm_len is None:
             # Allocate max possible length
@@ -109,53 +109,56 @@ class WMBase:
         else:
             wm = np.empty(self.wm_len * self.redundancy, dtype=np.uint8)
             
-        bits_done = 0
-        bits_remaining = len(wm)
+        wm_done = 0
+        wm_need = len(wm)
         coords_done = 0
         
-        while bits_remaining > 0:
-            chunk = self.make_chunk(wm, bits_done, bits_remaining)
-            coords_end = coords_done + len(chunk)
-            if coords_end > len(coords):
+        while wm_need > 0:
+            wm_chunk = self.make_wm_chunk(wm, wm_done, wm_need)
+            coords_chunk = self.make_coords_chunk(coords, coords_done, len(wm_chunk))
+            if coords_chunk is None:
                 if self.wm_len is not None:
                     raise Exception("Could not find watermark with given length")
-                elif len(coords) > coords_done:
-                    # No length given, continue while we have coords remaining.
-                    coords_end = len(coords)
                 else:
+                    # FIXME
                     break
             
-            coords_chunk = coords[coords_done:coords_end]
-            self.debug("Coords chunk", coords_chunk)
-            
-            bd = self.extract_chunk(chunk, coords_chunk)
-            coords_done = coords_end
-            bits_done += bd
-            bits_remaining -= bd
+            done = self.extract_chunk(wm_chunk, coords_chunk)
+            coords_done += len(coords_chunk)
+            wm_done += done
+            wm_need -= done
         
         self.debug("Raw wm", wm)
         self.extracted = self.postprocess_wm(wm)
         self.debug("Post wm", self.extracted)
-        self.debug("Fill carr", self.filled_carrier, "carr")
-        self.debug("Rest carr", self.restored_carrier, "carr")
+        self.debug("Fill carr", self.carrier, "carr")
+        self.debug("Rest carr", self.restored, "carr")
         return self.extracted
     
-    def make_chunk(self, wm, bits_done, bits_remaining):
-        if bits_remaining > self.block_len:
+    def make_wm_chunk(self, wm, start, need):
+        if need > self.block_len:
             # If bits_remaining is not a multiple of block_len,
             # cut the remainder into a separate chunk.
-            r = bits_remaining % self.block_len
-            chunk = wm[bits_done:bits_done+bits_remaining-r]
+            r = need % self.block_len
+            chunk = wm[start:start+need-r]
             return chunk.reshape(-1, self.block_len)
         else:
-            chunk = wm[bits_done:]
+            chunk = wm[start:]
             return chunk.reshape(1, -1)
+    
+    def make_coords_chunk(self, coords, start, need):
+        end = start + need
+        if end > len(coords):
+            return None
+        chunk = coords[start:end]
+        self.debug("Coords chunk", chunk)
+        return chunk
             
     def mse(self):
-        return np.square(self.carrier - self.filled_carrier).mean()
+        return np.square(self.container - self.carrier).mean()
             
     def psnr(self):
-        peak = np.abs(self.carrier).max()
+        peak = np.abs(self.container).max()
         return 10 * np.log10(peak**2 / self.mse())
     
     def debug(self, prefix, arr, type_=None):

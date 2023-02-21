@@ -1,0 +1,8 @@
+/*
+!/.gitignore
+!/Code
+!/Data
+!/Libs
+
+__pycache__
+.env

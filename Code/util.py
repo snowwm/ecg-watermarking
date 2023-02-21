@@ -17,7 +17,7 @@ def to_bits(data):
     return np.unpackbits(data, bitorder="little")
 
 def bits_to_bytes(bits):
-    return np.packbits(data, bitorder="little")
+    return np.packbits(bits, bitorder="little")
 
 def bits_to_str(bits):
     return bits_to_bytes(bits).decode("utf-8")
@@ -38,7 +38,10 @@ class Metrics:
         
     def add(self, s1, s2, rng):
         self.last_mse = np.square(s2 - s1).mean()
-        self.last_psnr = 10 * np.log10(rng**2 / self.last_mse)
+        if self.last_mse == 0:
+            self.last_psnr = np.inf
+        else:
+            self.last_psnr = 10 * np.log10(rng**2 / self.last_mse)
         
         if s1.min() < 0 or s1.max() > 1:
             s1 = util.to_bits(s1)

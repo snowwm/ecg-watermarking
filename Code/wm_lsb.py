@@ -6,7 +6,7 @@ class LSBEmbedder(WMBase):
         super().__init__(**kwargs)
         
     def check_range(self):
-        if np.iinfo(self.carrier.dtype).min == 0:
+        if np.iinfo(self.container.dtype).min == 0:
             # Unsigned carrier
             min = 0
             max = 2**self.block_len - 1
@@ -28,14 +28,14 @@ class LSBEmbedder(WMBase):
         
         for i in range(wm.shape[1]):
             coords_0 = coords[wm[:, i] == 0]
-            self.filled_carrier[coords_0] &= ~(1 << i)
+            self.carrier[coords_0] &= ~(1 << i)
             coords_1 = coords[wm[:, i] == 1]
-            self.filled_carrier[coords_1] |= (1 << i)
+            self.carrier[coords_1] |= (1 << i)
             
         return wm.size
             
     def extract_chunk(self, wm, coords):
-        carr = self.filled_carrier[coords]
+        carr = self.carrier[coords]
         
         for i in range(wm.shape[1]):
             wm[:, i] = (carr & (1 << i)) >> i
