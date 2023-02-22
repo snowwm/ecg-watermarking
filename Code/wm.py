@@ -168,6 +168,7 @@ class WMBase:
         print(prefix + ":", self.format_array(arr, type_))
     
     def format_array(self, arr, type_):
+        """Used for debug printing."""
         return arr
         
     def check_range(self):

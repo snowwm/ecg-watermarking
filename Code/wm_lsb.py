@@ -30,23 +30,39 @@ class LSBEmbedder(WMBase):
         
         for i in range(wm.shape[1]):
             j = self.lsb_lowest_bit + i
-            coords_0 = coords[wm[:, i] == 0]
-            self.carrier[coords_0] &= ~(1 << j)
-            coords_1 = coords[wm[:, i] == 1]
-            self.carrier[coords_1] |= (1 << j)
+            bit = 1 << j
+            cont = (self.container[coords] & bit) >> j
+            wm = self.embed_plane(j, wm[:, i], cont)
+            set_plane(self.carrier, wm, bit, coords)
             
         return wm.size
+
+    def embed_plane(self, bit_num, wm, cont):
+        return wm
             
     def extract_chunk(self, wm, coords):
-        carr = self.carrier[coords]
-        
         for i in range(wm.shape[1]):
             j = self.lsb_lowest_bit + i
-            wm[:, i] = (carr & (1 << j)) >> j
+            bit = 1 << j
+            carr = (self.carrier[coords] & bit) >> j
+            wm_, restored = self.extract_plane(j, carr)
+            wm[:, i] = wm_
+
+            if restored is not None:
+                set_plane(self.restored, restored, bit, coords)
             
         return wm.size
+
+    def extract_plane(self, bit_num, carr):
+        return carr, None
     
     def format_array(self, arr, type_):
         if type_ == "carr":
             arr = list(map(np.binary_repr, arr))
-        return arr 
+        return arr
+
+def set_plane(arr, content, bit, coords):
+    coords_0 = coords[content == 0]
+    arr[coords_0] &= ~bit
+    coords_1 = coords[content == 1]
+    arr[coords_1] |= bit

@@ -7,6 +7,7 @@ import numpy as np
 from db import Database
 from edf import EDF
 from wm_lsb import LSBEmbedder
+from wm_lcb import LCBEmbedder
 from wm_de import DEEmbedder
 from wm_pee import NeighorsPEE, SiblingChannelPEE
 from wm_itb import ITBEmbedder
@@ -70,7 +71,7 @@ def add_common_args(p):
     # Common WM params.
     p.add_argument("-d", "--data-file", type=Path, dest="data_file")
     p.add_argument("-c", "--channel", type=int, default=-1)
-    p.add_argument("-a", "--algo", choices=("lsb", "de", "pee-n", "pee-c", "itb"), default="lsb")
+    p.add_argument("-a", "--algo", choices=("lsb", "lcb", "de", "pee-n", "pee-c", "itb"), default="lsb")
 
     # Common embedder params.
     p.add_argument("-k", "--key", default=DEFAULT_KEY, dest="_key")
@@ -81,6 +82,9 @@ def add_common_args(p):
 
     # LSB params.
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
+
+    # LCB params.
+    p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
 
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
@@ -112,6 +116,8 @@ def add_noise(args):
 def wm(args):
     if args.algo == "lsb":
         wm_class = LSBEmbedder
+    elif args.algo == "lcb":
+        wm_class = LCBEmbedder
     elif args.algo == "de":
         wm_class = DEEmbedder
     elif args.algo == "pee-n":
@@ -147,6 +153,8 @@ def wm(args):
                 edf.add_noise(args.noise_var)
             
             edf.extract_watermark(worker, db.new_ctx(), orig_wm=orig_wm, orig_carr=orig_carr)
+            print()
+            print()
     else:
         if args.action in ("embed", "extract"):
             if args.edf_out is None:
