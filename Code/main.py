@@ -58,8 +58,9 @@ def make_parser():
     p.set_defaults(func=wm, action="check")
 
     p = subp.add_parser("research")
-    p.add_argument("wm_in", type=Path)
     p.add_argument("edf_files", type=Path, nargs="+")
+    p.add_argument("-w", "--wm-file", dest="wm_in", type=Path)
+    p.add_argument("-l", "--wm-len", dest="wm_len", type=int)
     p.add_argument("-n", "--noise-var", dest="noise_var", type=float)
     add_common_args(p)
     p.set_defaults(func=wm, action="research")
@@ -137,7 +138,13 @@ def wm(args):
     start_time = time.perf_counter()
         
     if args.action == "research":
-        watermark = args.wm_in.read_bytes()
+        if args.wm_in is not None:
+            watermark = args.wm_in.read_bytes()
+        elif args.wm_len is not None:
+            watermark = util.random_bytes(args.wm_len)
+        else:
+            parser.error("You must specify one of --wm-len and --wm-file")
+
         watermark = util.to_bits(watermark)
         worker.set_watermark(watermark)
         worker.wm_len = len(watermark)
