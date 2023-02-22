@@ -51,8 +51,10 @@ def bits_to_str(bits):
 def bits_to_int(bits):
     return int.from_bytes(bits_to_bytes(bits), sys.byteorder)
 
-def random_bytes(cnt):
-    rng = np.random.default_rng()
+def random_bytes(cnt, seed=None):
+    if seed is not None:
+        seed = list(seed.encode())
+    rng = np.random.default_rng(seed)
     return rng.bytes(cnt)
 
 class Metrics:

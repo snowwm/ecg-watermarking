@@ -24,6 +24,7 @@ def make_parser():
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
     p.add_argument("num_bytes", type=int)
     p.add_argument("out_file", type=Path)
+    p.add_argument("--seed")
     p.set_defaults(func=rand_bytes)
 
     p = subp.add_parser("info", help="Print some info about an EDF(+) file")
@@ -47,7 +48,7 @@ def make_parser():
     p.add_argument("edf_in", type=Path)
     p.add_argument("wm_out", type=Path)
     p.add_argument("edf_out", type=Path, nargs="?")
-    p.add_argument("-l", "--wm-len", dest="wm_len", type=int, required=True)
+    p.add_argument("-l", "--wm-len", type=int, required=True)
     add_common_args(p)
     p.set_defaults(func=wm, action="extract")
 
@@ -59,9 +60,10 @@ def make_parser():
 
     p = subp.add_parser("research")
     p.add_argument("edf_files", type=Path, nargs="+")
-    p.add_argument("-w", "--wm-file", dest="wm_in", type=Path)
-    p.add_argument("-l", "--wm-len", dest="wm_len", type=int)
-    p.add_argument("-n", "--noise-var", dest="noise_var", type=float)
+    p.add_argument("-w", "--wm-file", type=Path)
+    p.add_argument("-l", "--wm-len", type=int)
+    p.add_argument("--seed")
+    p.add_argument("-n", "--noise-var", type=float)
     add_common_args(p)
     p.set_defaults(func=wm, action="research")
     
@@ -70,7 +72,7 @@ def make_parser():
 
 def add_common_args(p):
     # Common WM params.
-    p.add_argument("-d", "--data-file", type=Path, dest="data_file")
+    p.add_argument("-d", "--data-file", type=Path)
     p.add_argument("-c", "--channel", type=int, default=-1)
     p.add_argument("-a", "--algo", choices=("lsb", "lcb", "de", "pee-n", "pee-c", "itb"), default="lsb")
 
@@ -98,7 +100,7 @@ def add_common_args(p):
 
 
 def rand_bytes(args):
-    args.out_file.write_bytes(util.random_bytes(args.num_bytes))
+    args.out_file.write_bytes(util.random_bytes(args.num_bytes, args.seed))
 
 
 def file_info(args):
@@ -138,10 +140,10 @@ def wm(args):
     start_time = time.perf_counter()
         
     if args.action == "research":
-        if args.wm_in is not None:
-            watermark = args.wm_in.read_bytes()
+        if args.wm_file is not None:
+            watermark = args.wm_file.read_bytes()
         elif args.wm_len is not None:
-            watermark = util.random_bytes(args.wm_len)
+            watermark = util.random_bytes(args.wm_len, args.seed)
         else:
             parser.error("You must specify one of --wm-len and --wm-file")
 
