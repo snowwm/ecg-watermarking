@@ -36,10 +36,6 @@ def rle_encode(seq, bitness):
     bounds = np.nonzero(seq[1:] != seq[:-1])[0] + 1
     rl_seq = np.diff(bounds, prepend=0, append=seq.size)
 
-    if seq.size and seq[0] == 1:
-        # rl_seq must start from a run of zeros, so add a zero-length run
-        rl_seq = np.insert(rl_seq, 0, 0)
-
     # Break runs longer than max_rl into smaller parts.
     # TODO Set bitness adaptively.
     max_rl = (1 << bitness) - 1
@@ -52,10 +48,14 @@ def rle_encode(seq, bitness):
     if total_reps != 0:
         # Need to insert dummy zero-length runs to maintain the same bit value
         # on extraction.
-        extra = np.tile([0, max_rl], total_reps)
+        extra = np.tile([max_rl, 0], total_reps)
         print(f"RLE encode: inserting {extra.size} extra elements")
         coords = np.cumsum(reps) * 2
         rl_seq = np.insert(extra, coords, rem + 1)
+
+    if seq.size and seq[0] == 1:
+        # rl_seq must start from a run of zeros, so add a zero-length run
+        rl_seq = np.insert(rl_seq, 0, 0)
 
     return util.to_bits(rl_seq, bit_depth=bitness)
 
@@ -75,6 +75,7 @@ def rle_decode(bits, bitness):
 
 # seq = np.random.randint(0, 2, 100)
 # print(seq)
-# res = rle_decode(rle_encode(seq))
+# bitness = 4
+# res = rle_decode(rle_encode(seq, bitness), bitness)
 # print(res)
 # assert np.array_equal(seq, res)
