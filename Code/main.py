@@ -87,12 +87,14 @@ def add_common_args(p):
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
 
     # LCB params.
+    p.add_argument("--lcb-coder", choices=["rle"], dest="_lcb_coder")
+    p.add_argument("--lcb-transform", choices=["dct", "dwt"], dest="_lcb_transform")
     p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
 
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
-    p.add_argument("--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift")
-    p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
+    p.add_argument("--de-rand-shift", action="store_true", dest="_de_rand_shift")
+    p.add_argument("--de-skip", action="store_true", dest="_de_skip")
 
     # PEE params.
     p.add_argument("--pee-neigbors", type=int, dest="_pee_neigbors")
