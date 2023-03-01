@@ -19,6 +19,7 @@ DEFAULT_KEY = "ВечностьПахнетНефтью"
 def make_parser():        
     parser = ArgumentParser(description="Medical timeseries watermarking tool.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="_debug")
+    parser.add_argument("-d", "--data-file", type=Path)
     subp = parser.add_subparsers(required=True)
 
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
@@ -93,32 +94,37 @@ def add_common_args(p):
 
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
-    p.add_argument("--de-rand-shift", action="store_true", dest="_de_rand_shift")
-    p.add_argument("--de-skip", action="store_true", dest="_de_skip")
+    # Here we need to explicitly specify default=None, otherwise store_true sets it to False.
+    p.add_argument("--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift")
+    p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
 
     # PEE params.
     p.add_argument("--pee-neigbors", type=int, dest="_pee_neigbors")
     p.add_argument("--pee-ref-channel", type=int, dest="_pee_ref_channel")
 
 
-def rand_bytes(args):
+def rand_bytes(args, db):
     args.out_file.write_bytes(util.random_bytes(args.num_bytes, args.seed))
 
 
-def file_info(args):
-    edf = EDF()
-    edf.load(str(args.edf_in))
+def file_info(args, db):
+    with db.new_ctx(aggregs=["mean", "worst"]) as db:
+        for edf_in in args.edf_files:
+            with db.new_ctx() as dbc:
+                edf = read_edf(edf_in, dbc, args.channel)
     edf.print_file_info()
 
+                for c in range(edf.signal_count):
+                    dbc.set(**edf.signal_info(c))
 
-def add_noise(args):
+def add_noise(args, db):
     edf = EDF()
     edf.load(str(args.edf_in))
     edf.add_noise(args.var)
     edf.save(str(args.edf_out))
 
 
-def wm(args):
+def wm(args, db):
     if args.algo == "lsb":
         wm_class = LSBEmbedder
     elif args.algo == "lcb":
@@ -135,10 +141,7 @@ def wm(args):
     wm_params = {k[1:]: v for k, v in vars(args).items()
         if k.startswith("_") and v is not None}
     worker = wm_class(**wm_params)
-    db = Database()
-    if args.data_file:
-        db.load(args.data_file)
-    db.set_props(**wm_params, algo=args.algo)
+    db.set(**wm_params, algo=args.algo)
     start_time = time.perf_counter()
         
     if args.action == "research":
@@ -152,18 +155,21 @@ def wm(args):
         watermark = util.to_bits(watermark)
         worker.set_watermark(watermark)
         worker.wm_len = len(watermark)
-        db.set_props(noise_var=args.noise_var)
+        db.set(noise_var=args.noise_var)
         
         for edf_in in args.edf_files:
             edf = read_edf(edf_in, db, args.channel)
             orig_carr = edf.signals.copy()
             orig_wm = [watermark] * edf.signal_count
-            edf.embed_watermark(worker, db.new_ctx())
+
+            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
+                edf.embed_watermark(worker, dbc)
             
             if args.noise_var:
                 edf.add_noise(args.noise_var)
             
-            edf.extract_watermark(worker, db.new_ctx(), orig_wm=orig_wm, orig_carr=orig_carr)
+            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
+                edf.extract_watermark(worker, dbc, orig_wm=orig_wm, orig_carr=orig_carr)
             print()
             print()
     else:
@@ -185,11 +191,13 @@ def wm(args):
         
         if args.action == "embed":
             worker.set_watermark(watermark)
-            edf.embed_watermark(worker, db.new_ctx())
+            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
+                edf.embed_watermark(worker, dbc)
             edf.save(str(args.edf_out))
         elif args.action == "extract":
             worker.wm_len = args.wm_len
-            wms = edf.extract_watermark(worker, db.new_ctx())
+            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
+                wms = edf.extract_watermark(worker, dbc)
             for wm in wms:
                 if not np.array_equal(wm, wms[0]):
                     print("Warning: different watermarks in different channels. Only the first one will be written.")
@@ -199,13 +207,12 @@ def wm(args):
         elif args.action == "check":
             orig_wm = [watermark] * edf.signal_count
             worker.wm_len = len(watermark)
-            edf.extract_watermark(worker, db.new_ctx(), orig_wm=orig_wm)
+            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
+                edf.extract_watermark(worker, dbc, orig_wm=orig_wm)
             
     elapsed = time.perf_counter() - start_time
     print(f"Elapsed time: {elapsed:.2} s")
-    db.set_props(elapsed_time=elapsed)
-    if args.data_file:
-        db.save(args.data_file)
+    db.set(elapsed_time=elapsed)
         
         
 def read_edf(path, db, chan):

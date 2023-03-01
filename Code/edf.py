@@ -2,7 +2,7 @@ import numpy as np
 from pyedflib import EdfReader
 from pyedflib.highlevel import read_edf, write_edf, dig2phys
 
-from util import Metrics
+from db import DatabaseContext
 
 class EDF:
     def load(self, path):
@@ -82,7 +82,7 @@ class EDF:
         }
         
     def print_file_info(self):
-        print(f"{self.file_type} file, {self.signal_count} signals.")
+        print(f"{self.file_type} file, {self.signal_count} signals")
         print(f"Duration = {self.duration} s")
         print(f"Watermark = {self.wm_str!r}")
         
@@ -95,13 +95,12 @@ class EDF:
             print(f"  Eff. digital range: {h['eff_digital_min']} - {h['eff_digital_max']}")
             print(f"  Physical range: {h['physical_min']} - {h['physical_max']} {h['dimension']}")
             print(f"  Eff. physical range: {h['eff_physical_min']} - {h['eff_physical_max']} {h['dimension']}")
-    
+
     def use_channel(self, chan):
         self.used_channels = range(len(self.signals)) if chan == -1 else [chan]
         
-    def embed_watermark(self, embedder, db):
+    def embed_watermark(self, embedder, db: DatabaseContext):
         print(f"\nEmbedding watermark...")
-        emb_metrics = Metrics("embed")
         embedder.set_edf(self)
         
         for c in self.used_channels:
@@ -110,24 +109,13 @@ class EDF:
             embedder.set_container(self.signals[c], rng)
             self.signals[c] = embedder.embed()
             
-            emb_metrics.add(embedder.carrier, embedder.container, rng[1] - rng[0] + 1)
-            emb_metrics.print_last()
-            dbc = db.new_ctx()
-            dbc.set_props(channel=c, **self.signal_info(c))
-            dbc.set_props(**emb_metrics.get_last())
-            dbc.save_record()
+            with db.new_ctx() as dbc:
+                dbc.set(channel=c, **self.signal_info(c))
+                dbc.set_psnr(embedder.carrier, embedder.container, rng, prefix="embed", print=True)
             
-        if len(self.used_channels) > 1:
-            print("Worst case metrics:")
-            emb_metrics.print_worst()
-            db.set_props(channel=-1, **emb_metrics.get_worst())
-            db.save_record()
-            
-    def extract_watermark(self, extractor, db, *, orig_wm=None, orig_carr=None):
+    def extract_watermark(self, extractor, db: DatabaseContext, *, orig_wm=None, orig_carr=None):
         print(f"\nExtracting watermark...")
         res = []
-        extr_metrics = Metrics("extract")
-        rest_metrics = Metrics("restore")
         extractor.set_edf(self)
         
         for c in self.used_channels:
@@ -138,35 +126,19 @@ class EDF:
             extracted = extractor.extract()
             self.signals[c] = extractor.restored
             res.append(extracted)
-            dbc = db.new_ctx()
-            dbc.set_props(channel=c, **self.signal_info(c))
-            
-            if orig_wm is not None:
-                if np.array_equal(extracted, orig_wm[c]):
-                    print("  ✔️ Watermark matches")
-                else:
-                    print("  ❌ Watermark doesn't match")
-                extr_metrics.add(orig_wm[c], extracted, 1)
-                extr_metrics.print_last()
-                dbc.set_props(**extr_metrics.get_last())
-            
-            if orig_carr is not None:
-                rest_metrics.add(orig_carr[c], s, rng[1] - rng[0] + 1)
-                rest_metrics.print_last()
-                dbc.set_props(**rest_metrics.get_last())
+
+            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
+                dbc.set(channel=c, **self.signal_info(c))
                 
-            dbc.save_record()
-            
-        if len(self.used_channels) > 1:
-            print("Worst-case metrics:")
-            db.set_props(channel=-1)
-            if orig_wm is not None:
-                extr_metrics.print_worst()
-                db.set_props(**extr_metrics.get_worst())
-            if orig_carr is not None:
-                rest_metrics.print_worst()
-                db.set_props(**rest_metrics.get_worst())
-            db.save_record()
+                if orig_wm is not None:
+                    if np.array_equal(extracted, orig_wm[c]):
+                        print("  ✔️ Watermark matches")
+                    else:
+                        print("  ❌ Watermark doesn't match")
+                    dbc.set_ber(orig_wm[c], extracted, prefix="extract", print=True)
+                
+                if orig_carr is not None:
+                    dbc.set_psnr(orig_carr[c], s, rng, prefix="restore", print=True)
             
         return res
     
