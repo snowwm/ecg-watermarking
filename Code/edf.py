@@ -96,6 +96,23 @@ class EDF:
             print(f"  Physical range: {h['physical_min']} - {h['physical_max']} {h['dimension']}")
             print(f"  Eff. physical range: {h['eff_physical_min']} - {h['eff_physical_max']} {h['dimension']}")
 
+    def reconstruct_channels(self, db: DatabaseContext):
+        i = self.signals[0]
+        ii = self.signals[1]
+        iii = self.signals[2]
+        avr = self.signals[3]
+        avl = self.signals[4]
+        avf = self.signals[5]
+
+        iii_pred = ii - i
+        db.set_psnr(iii_pred, iii, prefix="III")
+        avr_pred = (-i - ii) // 2
+        db.set_psnr(avr_pred, avr, prefix="aVR")
+        avl_pred = (i - iii_pred) // 2
+        db.set_psnr(avl_pred, avl, prefix="aVL")
+        avf_pred = (ii + iii_pred) // 2
+        db.set_psnr(avf_pred, avf, prefix="aVF")
+    
     def use_channel(self, chan):
         self.used_channels = range(len(self.signals)) if chan == -1 else [chan]
         

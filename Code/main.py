@@ -28,8 +28,10 @@ def make_parser():
     p.add_argument("--seed")
     p.set_defaults(func=rand_bytes)
 
-    p = subp.add_parser("info", help="Print some info about an EDF(+) file")
-    p.add_argument("edf_in", type=Path)
+    p = subp.add_parser("info", help="Print some info about EDF(+) file(s)")
+    p.add_argument("edf_files", type=Path, nargs="+")
+    p.add_argument("-c", "--channel", type=int, default=-1)
+    p.add_argument("-r", "--reconstruct", action="store_true")
     p.set_defaults(func=file_info)
 
     p = subp.add_parser("add-noise")
@@ -73,7 +75,6 @@ def make_parser():
 
 def add_common_args(p):
     # Common WM params.
-    p.add_argument("-d", "--data-file", type=Path)
     p.add_argument("-c", "--channel", type=int, default=-1)
     p.add_argument("-a", "--algo", choices=("lsb", "lcb", "de", "pee-n", "pee-c", "itb"), default="lsb")
 
@@ -112,10 +113,14 @@ def file_info(args, db):
         for edf_in in args.edf_files:
             with db.new_ctx() as dbc:
                 edf = read_edf(edf_in, dbc, args.channel)
-    edf.print_file_info()
-
+                edf.print_file_info()
+                
                 for c in range(edf.signal_count):
                     dbc.set(**edf.signal_info(c))
+
+                if args.reconstruct:
+                    edf.reconstruct_channels(dbc)
+
 
 def add_noise(args, db):
     edf = EDF()
@@ -219,11 +224,16 @@ def read_edf(path, db, chan):
     edf = EDF()
     edf.load(str(path))
     edf.use_channel(chan)
-    db.set_props(filename=path.name, filepath=str(path))
-    db.set_props(**edf.file_info())
+    db.set(filename=path.name, filepath=str(path))
+    db.set(**edf.file_info())
     return edf
 
 
 parser = make_parser()
 args = parser.parse_args()
-args.func(args)
+db = Database()
+if args.data_file:
+    db.load(args.data_file)
+args.func(args, db)
+if args.data_file:
+    db.dump(args.data_file)
