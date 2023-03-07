@@ -10,15 +10,20 @@ import util
 import wm
 
 DEFAULT_KEY = "ВечностьПахнетНефтью"
-        
 
-def make_parser():        
+
+def make_parser():
     parser = ArgumentParser(description="Medical timeseries watermarking tool.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="_debug")
     parser.add_argument("-d", "--data-file", type=Path)
     parser.add_argument("--data-all", action="store_true")
     parser.add_argument("--seed")
     subp = parser.add_subparsers(required=True)
+
+    p = subp.add_parser("test", help="Run tests")
+    p.add_argument("-a", "--algo")
+    p.add_argument("-s", "--only-skipped", action="store_true")
+    p.set_defaults(func=test)
 
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
     p.add_argument("num_bytes", type=int)
@@ -65,7 +70,7 @@ def make_parser():
     p.add_argument("-n", "--noise-var", type=float)
     add_common_args(p)
     p.set_defaults(func=wm, action="research")
-    
+
     return parser
 
 
@@ -107,8 +112,12 @@ def add_common_args(p):
     p.add_argument("--pee-ref-channel", type=int, dest="_pee_ref_channel")
 
 
-def rand_bytes(args, db):
-    args.out_file.write_bytes(util.random_bytes(args.num_bytes, args.seed))
+def test(args, db):
+    from test import test_wm
+
+    for algo in wm.all_algorithms:
+        if args.algo is None or algo.codename in args.algo:
+            test_wm.test_algo(algo, debug=args._debug, only_skipped=args.only_skipped)
 
 
 def file_info(args, db):
@@ -117,7 +126,7 @@ def file_info(args, db):
             with db.new_ctx() as dbc:
                 rec = load_record_file(rec_in, dbc, args.channel)
                 rec.print_file_info()
-                
+
                 for c in range(rec.signal_count):
                     dbc.set(**rec.signal_info(c))
 
@@ -146,7 +155,7 @@ def do_wm(args, db):
     worker = wm_class(**wm_params)
     db.set(**wm_params, algo=args.algo)
     start_time = time.perf_counter()
-        
+
     if args.action == "research":
         if args.wm_file is not None:
             watermark = args.wm_file.read_bytes()
@@ -159,7 +168,7 @@ def do_wm(args, db):
         worker.set_watermark(watermark)
         worker.wm_len = len(watermark)
         db.set(noise_var=args.noise_var)
-        
+
         for rec_in in args.rec_files:
             rec = load_record_file(rec_in, db, args.channel)
             orig_carr = rec.signals.copy()
@@ -167,10 +176,10 @@ def do_wm(args, db):
 
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 rec.embed_watermark(worker, dbc)
-            
+
             if args.noise_var:
                 rec.add_noise(args.noise_var)
-            
+
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 rec.extract_watermark(worker, dbc, orig_wm=orig_wm, orig_carr=orig_carr)
             print()
@@ -181,7 +190,7 @@ def do_wm(args, db):
                 args.rec_out = args.rec_in.parent / (
                     args.rec_in.stem + "_" + args.action + args.rec_in.suffix
                 )
-            
+
         if args.action in ("embed", "check"):
             if not args.wm_in:
                 watermark = rec.wm_str
@@ -190,9 +199,9 @@ def do_wm(args, db):
             else:
                 watermark = args.wm_in.read_bytes()
             watermark = util.to_bits(watermark)
-            
+
         rec = load_record_file(args.rec_in, db, args.channel)
-        
+
         if args.action == "embed":
             worker.set_watermark(watermark)
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
@@ -215,7 +224,7 @@ def do_wm(args, db):
             worker.wm_len = len(watermark)
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 rec.extract_watermark(worker, dbc, orig_wm=orig_wm)
-            
+
     elapsed = time.perf_counter() - start_time
     print(f"Elapsed time: {elapsed:.2} s")
     db.set(elapsed_time=elapsed)
@@ -228,4 +237,4 @@ util.Random.default_seed = args.seed
 db = Database(args.data_file, dump_all=args.data_all)
 
 with db:
-args.func(args, db)
+    args.func(args, db)

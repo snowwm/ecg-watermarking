@@ -48,7 +48,7 @@ class Random(np.random.Generator):
         m = np.mean((vmin, vmax))
 
         for f, a in zip(freqs, amps):
-            r = self.triangular(vmin, m, vmax, size=round(size * f, dtype=int))
+            r = self.triangular(vmin, m, vmax, size=int(np.round(size * f)))
             s += a * signal.resample(r, size)
 
         return self.add_noise(
@@ -65,7 +65,7 @@ class Random(np.random.Generator):
 
 
 # import matplotlib.pyplot as plt
-# plt.plot(Random().signal(1000, -500, 500, noise_var=10))
+# plt.plot(Random().signal(1000, vmin=-300, vmax=300))
 # plt.show()
 
 # Functions for converting bits & bytes.

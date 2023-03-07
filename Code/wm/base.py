@@ -6,11 +6,22 @@ import util
 
 class WMBase:
     codename: str = None
+    max_restore_error = None
 
     # When this is None, each block will be represented as an array of bits.
     # Otherwise, that array will be packed and converted to this dtype.
     packed_block_type: np.dtype = None
 
+    test_matrix = {
+        "wm_cont_len": [
+            (83, 249),
+            (4000, 12000),
+        ],  # wm_len in bits, cont_len in samples
+        "shuffle": [False, True],
+        "contiguous": [False, True],
+        "redundancy": [1, 2, 3],
+        "block_len": [1, 4, 8],
+    }
 
     # Lifecycle and state manipulation.
 
@@ -228,3 +239,11 @@ class WMBase:
         if type_ == "bin":
             arr = list(map(lambda x: np.binary_repr(x, width=0), arr))
         return arr
+
+    @classmethod
+    def get_test_matrix(cls):
+        m = {}
+        for c in reversed(cls.__mro__):
+            if issubclass(c, WMBase):
+                m |= c.test_matrix
+        return m

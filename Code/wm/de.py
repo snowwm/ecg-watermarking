@@ -8,6 +8,12 @@ from .base import WMBase
 class DEEmbedder(WMBase):
     codename = "de"
     packed_block_type = np.uint8
+    test_matrix = {
+        "wm_cont_len": [(83, 1000), (2000, 18000)],
+        "redundancy": [1, 2],
+        "de_rand_shift": [False, True],
+        "de_shift": [1, 3],
+    }
 
     def __init__(self, de_shift=1, de_rand_shift=False, de_skip=True, **kwargs):
         super().__init__(**kwargs)
@@ -23,6 +29,9 @@ class DEEmbedder(WMBase):
         self.de_k1 = (self.de_n + 1) / self.de_mod
         self.de_k2 = self.de_n / self.de_mod
 
+    @property
+    def max_restore_error(self):
+        return self.de_n * 2
 
     def check_range(self):
         # Will check each element individually when embedding.

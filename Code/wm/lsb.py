@@ -5,6 +5,10 @@ from .base import WMBase
 
 class LSBEmbedder(WMBase):
     codename = "lsb"
+    test_matrix = {
+        "lsb_lowest_bit": [0, 3, 6],
+        "block_len": [1, 2],
+    }
 
     def __init__(self, lsb_lowest_bit=0, **kwargs):
         super().__init__(**kwargs)

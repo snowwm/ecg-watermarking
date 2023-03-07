@@ -57,6 +57,12 @@ class PEEBase(WMBase):
 
 class NeighorsPEE(PEEBase):
     codename = "pee-n"
+    max_restore_error = 0
+    test_matrix = {
+        "wm_cont_len": [(83, 253), (4000, 12004)],
+        "contiguous": [True],
+        "block_len": [1, 2],
+    }
 
     def __init__(self, pee_neighbors=2, **kwargs) -> None:
         """
@@ -101,3 +107,8 @@ class SiblingChannelPEE(PEEBase):
 
     def predict(self, i):
         return self.pred_seq[i]
+
+    # This class doesn't support tests currently.
+    @classmethod
+    def get_test_matrix(cls):
+        return {}

@@ -10,6 +10,15 @@ SIZE_BITNESS = 32
 
 class LCBEmbedder(LSBEmbedder):
     codename = "lcb"
+    max_restore_error = 0
+    test_matrix = {
+        "wm_cont_len": [(80, 1000), (2000, 18000)],
+        "redundancy": [1],
+        "contiguous": [True],
+        "lsb_lowest_bit": [5, 6],
+        "lcb_coder": ["rle"],
+        "lcb_rle_bitness": [3, 4, 5],
+    }
 
     def __init__(self, lcb_coder="rle", **kwargs):
         lcb_args = {k: v for k, v in kwargs.items() if k.startswith("lcb_")}

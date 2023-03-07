@@ -9,6 +9,11 @@ from .base import WMBase
 class ITBEmbedder(WMBase):
     codename = "itb"
     packed_block_type = np.uint8
+    max_restore_error = 0
+    test_matrix = {
+        "wm_cont_len": [(83, 250), (3000, 9001)],
+        "block_len": [1],
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
