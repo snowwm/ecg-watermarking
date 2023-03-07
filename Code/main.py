@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 from db import Database
-from edf import EDF
+from records import load_record_file
 from wm_lsb import LSBEmbedder
 from wm_lcb import LCBEmbedder
 from wm_de import DEEmbedder
@@ -30,43 +30,42 @@ def make_parser():
     p.set_defaults(func=rand_bytes)
 
     p = subp.add_parser("info", help="Print some info about EDF(+) file(s)")
-    p.add_argument("edf_files", type=Path, nargs="+")
+    p.add_argument("rec_files", type=Path, nargs="+")
     p.add_argument("-c", "--channel", type=int, default=-1)
     p.add_argument("-r", "--reconstruct", action="store_true")
     p.set_defaults(func=file_info)
 
     p = subp.add_parser("add-noise")
     p.add_argument("var", type=float)
-    p.add_argument("edf_in", type=Path)
-    p.add_argument("edf_out", type=Path, nargs="?")
+    p.add_argument("rec_in", type=Path)
+    p.add_argument("rec_out", type=Path, nargs="?")
     p.set_defaults(func=add_noise)
 
     p = subp.add_parser("embed")
-    p.add_argument("edf_in", type=Path)
+    p.add_argument("rec_in", type=Path)
     p.add_argument("wm_in", type=Path)
-    p.add_argument("edf_out", type=Path, nargs="?")
+    p.add_argument("rec_out", type=Path, nargs="?")
     add_common_args(p)
     p.set_defaults(func=wm, action="embed")
 
     p = subp.add_parser("extract")
-    p.add_argument("edf_in", type=Path)
+    p.add_argument("rec_in", type=Path)
     p.add_argument("wm_out", type=Path)
-    p.add_argument("edf_out", type=Path, nargs="?")
+    p.add_argument("rec_out", type=Path, nargs="?")
     p.add_argument("-l", "--wm-len", type=int, required=True)
     add_common_args(p)
     p.set_defaults(func=wm, action="extract")
 
     p = subp.add_parser("check")
-    p.add_argument("edf_in", type=Path)
+    p.add_argument("rec_in", type=Path)
     p.add_argument("wm_in", type=Path)
     add_common_args(p)
     p.set_defaults(func=wm, action="check")
 
     p = subp.add_parser("research")
-    p.add_argument("edf_files", type=Path, nargs="+")
+    p.add_argument("rec_files", type=Path, nargs="+")
     p.add_argument("-w", "--wm-file", type=Path)
     p.add_argument("-l", "--wm-len", type=int)
-    p.add_argument("--seed")
     p.add_argument("-n", "--noise-var", type=float)
     add_common_args(p)
     p.set_defaults(func=wm, action="research")
@@ -111,38 +110,26 @@ def rand_bytes(args, db):
 
 def file_info(args, db):
     with db.new_ctx(aggregs=["mean", "worst"]) as db:
-        for edf_in in args.edf_files:
+        for rec_in in args.rec_files:
             with db.new_ctx() as dbc:
-                edf = read_edf(edf_in, dbc, args.channel)
-                edf.print_file_info()
+                rec = load_record_file(rec_in, dbc, args.channel)
+                rec.print_file_info()
                 
-                for c in range(edf.signal_count):
-                    dbc.set(**edf.signal_info(c))
+                for c in range(rec.signal_count):
+                    dbc.set(**rec.signal_info(c))
 
                 if args.reconstruct:
-                    edf.reconstruct_channels(dbc)
+                    rec.reconstruct_channels(dbc)
+
 
 
 def add_noise(args, db):
-    edf = EDF()
-    edf.load(str(args.edf_in))
-    edf.add_noise(args.var)
-    edf.save(str(args.edf_out))
+    rec = load_record_file(args.rec_in, db, args.channel)
+    rec.add_noise(args.var)
+    rec.save(args.rec_out)
 
 
-def wm(args, db):
-    if args.algo == "lsb":
-        wm_class = LSBEmbedder
-    elif args.algo == "lcb":
-        wm_class = LCBEmbedder
-    elif args.algo == "de":
-        wm_class = DEEmbedder
-    elif args.algo == "pee-n":
-        wm_class = NeighorsPEE
-    elif args.algo == "pee-c":
-        wm_class = SiblingChannelPEE
-    elif args.algo == "itb":
-        wm_class = ITBEmbedder
+def do_wm(args, db):
 
     wm_params = {k[1:]: v for k, v in vars(args).items()
         if k.startswith("_") and v is not None}
@@ -163,71 +150,65 @@ def wm(args, db):
         worker.wm_len = len(watermark)
         db.set(noise_var=args.noise_var)
         
-        for edf_in in args.edf_files:
-            edf = read_edf(edf_in, db, args.channel)
-            orig_carr = edf.signals.copy()
-            orig_wm = [watermark] * edf.signal_count
+        for rec_in in args.rec_files:
+            rec = load_record_file(rec_in, db, args.channel)
+            orig_carr = rec.signals.copy()
+            orig_wm = [watermark] * rec.signal_count
 
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                edf.embed_watermark(worker, dbc)
+                rec.embed_watermark(worker, dbc)
             
             if args.noise_var:
-                edf.add_noise(args.noise_var)
+                rec.add_noise(args.noise_var)
             
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                edf.extract_watermark(worker, dbc, orig_wm=orig_wm, orig_carr=orig_carr)
+                rec.extract_watermark(worker, dbc, orig_wm=orig_wm, orig_carr=orig_carr)
             print()
             print()
     else:
         if args.action in ("embed", "extract"):
-            if args.edf_out is None:
-                args.edf_out = args.edf_in.parent / (
-                    args.edf_in.stem + "_" + args.action + args.edf_in.suffix)
+            if args.rec_out is None:
+                args.rec_out = args.rec_in.parent / (
+                    args.rec_in.stem + "_" + args.action + args.rec_in.suffix
+                )
             
         if args.action in ("embed", "check"):
             if not args.wm_in:
-                watermark = edf.wm_str
+                watermark = rec.wm_str
                 print("Derived watermark from metadata:")
                 print(f"  {watermark!r}")
             else:
                 watermark = args.wm_in.read_bytes()
             watermark = util.to_bits(watermark)
             
-        edf = read_edf(args.edf_in, db, args.channel)
+        rec = load_record_file(args.rec_in, db, args.channel)
         
         if args.action == "embed":
             worker.set_watermark(watermark)
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                edf.embed_watermark(worker, dbc)
-            edf.save(str(args.edf_out))
+                rec.embed_watermark(worker, dbc)
+            rec.save(args.rec_out)
         elif args.action == "extract":
             worker.wm_len = args.wm_len
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                wms = edf.extract_watermark(worker, dbc)
+                wms = rec.extract_watermark(worker, dbc)
             for wm in wms:
                 if not np.array_equal(wm, wms[0]):
-                    print("Warning: different watermarks in different channels. Only the first one will be written.")
+                    print(
+                        "Warning: different watermarks in different channels. Only the first one will be written."
+                    )
                     break
             args.wm_out.write_bytes(wms[0])
-            edf.save(str(args.edf_out))
+            rec.save(args.rec_out)
         elif args.action == "check":
-            orig_wm = [watermark] * edf.signal_count
+            orig_wm = [watermark] * rec.signal_count
             worker.wm_len = len(watermark)
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                edf.extract_watermark(worker, dbc, orig_wm=orig_wm)
+                rec.extract_watermark(worker, dbc, orig_wm=orig_wm)
             
     elapsed = time.perf_counter() - start_time
     print(f"Elapsed time: {elapsed:.2} s")
     db.set(elapsed_time=elapsed)
-        
-        
-def read_edf(path, db, chan):
-    edf = EDF()
-    edf.load(str(path))
-    edf.use_channel(chan)
-    db.set(filename=path.name, filepath=str(path))
-    db.set(**edf.file_info())
-    return edf
 
 
 parser = make_parser()
@@ -235,5 +216,3 @@ args = parser.parse_args()
 db = Database(args.data_file, dump_all=args.data_all)
 with db:
 args.func(args, db)
-if args.data_file:
-    db.dump(args.data_file)
