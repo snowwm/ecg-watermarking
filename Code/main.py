@@ -21,12 +21,12 @@ def make_parser():
     parser.add_argument("-v", "--verbose", action="store_true", dest="_debug")
     parser.add_argument("-d", "--data-file", type=Path)
     parser.add_argument("--data-all", action="store_true")
+    parser.add_argument("--seed")
     subp = parser.add_subparsers(required=True)
 
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
     p.add_argument("num_bytes", type=int)
     p.add_argument("out_file", type=Path)
-    p.add_argument("--seed")
     p.set_defaults(func=rand_bytes)
 
     p = subp.add_parser("info", help="Print some info about EDF(+) file(s)")
@@ -122,6 +122,9 @@ def file_info(args, db):
                     rec.reconstruct_channels(dbc)
 
 
+def rand_bytes(args, db):
+    args.out_file.write_bytes(util.Random().bytes(args.num_bytes))
+
 
 def add_noise(args, db):
     rec = load_record_file(args.rec_in, db, args.channel)
@@ -141,7 +144,7 @@ def do_wm(args, db):
         if args.wm_file is not None:
             watermark = args.wm_file.read_bytes()
         elif args.wm_len is not None:
-            watermark = util.random_bytes(args.wm_len, args.seed)
+            watermark = util.Random().bytes(args.wm_len)
         else:
             parser.error("You must specify one of --wm-len and --wm-file")
 
@@ -213,6 +216,9 @@ def do_wm(args, db):
 
 parser = make_parser()
 args = parser.parse_args()
+
+util.Random.default_seed = args.seed
 db = Database(args.data_file, dump_all=args.data_all)
+
 with db:
 args.func(args, db)

@@ -2,6 +2,73 @@ import sys
 
 import numpy as np
 
+_notset = object()
+
+
+class Random(np.random.Generator):
+    default_seed = None
+
+    def __init__(self, seed=_notset):
+        if seed is _notset:
+            seed = self.default_seed
+        if isinstance(seed, str):
+            seed = seed.encode()
+        super().__init__(np.random.PCG64(seed))
+
+    def signal(
+        self,
+        size,
+        vmin=None,
+        vmax=None,
+        *,
+        freqs=None,
+        amps=None,
+        noise_var=0,
+        dtype=np.int8
+    ):
+        """Generate a random integer signal with given frequencies."""
+        from scipy import signal
+
+        if np.dtype(dtype).kind in "iu":
+            if vmin is None:
+                vmin = np.iinfo(dtype).min
+            if vmax is None:
+                vmax = np.iinfo(dtype).max
+        elif vmin is None or vmax is None:
+            raise ValueError("Must specify vmin and vmax for float dtypes")
+
+        if freqs is None:
+            freqs = 10 / size, 100 / size
+        if amps is None:
+            amps = np.linspace(4, 1, len(freqs))
+
+        s = np.zeros((size,))
+        m = np.mean((vmin, vmax))
+
+        for f, a in zip(freqs, amps):
+            r = self.triangular(vmin, m, vmax, size=round(size * f, dtype=int))
+            s += a * signal.resample(r, size)
+
+        return self.add_noise(
+            s / sum(amps), noise_var, vmin=vmin, vmax=vmax, dtype=dtype
+        )
+
+    def add_noise(self, signal, var: float, *, vmin=None, vmax=None, dtype=None):
+        noise = self.normal(0, var, len(signal))
+        ns = signal + noise
+        ns = ns.round().astype(dtype or signal.dtype)
+        if vmin is not None or vmax is not None:
+            ns = np.clip(ns, vmin, vmax)
+        return ns
+
+
+# import matplotlib.pyplot as plt
+# plt.plot(Random().signal(1000, -500, 500, noise_var=10))
+# plt.show()
+
+# Functions for converting bits & bytes.
+
+
 def to_bits(data, *, bit_depth=None):
     bps = 8
     if isinstance(data, str):
@@ -16,7 +83,7 @@ def to_bits(data, *, bit_depth=None):
             data = data.tobytes()
     elif not isinstance(data, bytes):
         raise NotImplementedError("Expecting bytes, str or ndarray")
-        
+
     if isinstance(data, bytes):
         data = np.frombuffer(data, dtype=np.uint8)
 
@@ -27,6 +94,7 @@ def to_bits(data, *, bit_depth=None):
         assert bit_depth < bps
         bits = bits.reshape(-1, bps)[:, :bit_depth].flatten()
     return bits
+
 
 def bits_to_ndarray(bits, shape=None, *, dtype=np.uint8, bit_depth=None):
     bps = dtype().itemsize * 8
@@ -42,17 +110,38 @@ def bits_to_ndarray(bits, shape=None, *, dtype=np.uint8, bit_depth=None):
         res = res.reshape(shape)
     return res
 
+
 def bits_to_bytes(bits):
     return bits_to_ndarray(bits).tobytes()
+
 
 def bits_to_str(bits):
     return bits_to_bytes(bits).decode("utf-8")
 
+
 def bits_to_int(bits):
     return int.from_bytes(bits_to_bytes(bits), sys.byteorder)
 
-def random_bytes(cnt, seed=None):
-    if seed is not None:
-        seed = list(seed.encode())
-    rng = np.random.default_rng(seed)
-    return rng.bytes(cnt)
+
+# Other utilities.
+
+
+def round(val, mode="round", *, ref=None, dtype=None):
+    if ref is not None:
+        if isinstance(ref, np.ndarray):
+            dtype = ref.dtype
+        else:
+            dtype = type(ref)
+
+    func = getattr(np, mode)
+    val = func(val)
+    if dtype is not None:
+        val = val.astype(dtype)
+    return val
+
+
+def dtype_info(dtype):
+    if dtype.kind == "f":
+        return np.finfo(dtype)
+    else:
+        return np.iinfo(dtype)
