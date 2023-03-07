@@ -2,7 +2,9 @@ import builtins
 from collections import ChainMap
 import csv
 from numbers import Number
+from pathlib import Path
 import re
+from typing import Callable, Mapping
 
 import numpy as np
 
@@ -20,22 +22,34 @@ KEY_FIELDS = [
     "de_shift",
     "de_rand_shift",
     "noise_var",
-    "agg"
+    "agg",
 ]
 
 
 class DatabaseContext:
-    def __init__(self, parent: "DatabaseContext", data, *, prefix=None, aggregs=[]):
+    def __init__(
+        self,
+        parent: "DatabaseContext" = None,
+        data: Mapping = None,
+        *,
+        prefix: str = "",
+        aggregs: list[str | Callable] = [],
+    ):
         self.parent = parent
+        if data is None:
+            data = {}
         self.data = data
         self.records = []
         self.prefix = prefix
         self.aggregs = aggregs
-        
+
     def new_ctx(self, **kwargs):
         return DatabaseContext(self, self.data.new_child(), **kwargs)
-        
+
     def save(self):
+        if self.parent is None:
+            return
+
         if self.records:
             # This is a branch context.
             self.parent.records.extend(self.records)
@@ -47,13 +61,13 @@ class DatabaseContext:
 
     def __enter__(self):
         return self
-    
+
     def __exit__(self, *_):
         self.save()
-        
+
     def set(self, prefix=None, print=False, **props):
         if prefix is None:
-            prefix = self.prefix or ""
+            prefix = self.prefix
         if prefix:
             prefix = prefix + "_"
 
@@ -62,7 +76,7 @@ class DatabaseContext:
             self.data[k] = v
             if print:
                 builtins.print(f"  {k} = {v:.2}")
-        
+
     def set_psnr(self, s1, s2, rng=None, **kwargs):
         mse = np.square(s2 - s1).mean()
         if mse == 0:
@@ -74,20 +88,20 @@ class DatabaseContext:
                 rng = rng[1] - rng[0] + 1
             psnr = 10 * np.log10(rng**2 / mse)
         self.set(mse=mse, psnr=psnr, **kwargs)
-        
+
     def set_ber(self, s1, s2, **kwargs):
         if s1.min() < 0 or s1.max() > 1:
             s1 = util.to_bits(s1)
             s2 = util.to_bits(s2)
         ber = np.count_nonzero(s1 - s2) / len(s1)
         self.set(ber=ber, **kwargs)
-        
+
     def get_record(self, index):
         return self.records[index]
-        
+
     def get_last(self):
         return self.get_record(-1)
-        
+
     def apply(self, fallback=None, **funcs):
         res = {}
         for k, v in self.records[0].items():
@@ -102,7 +116,7 @@ class DatabaseContext:
             if fallback:
                 res[k] = fallback([x[k] for x in self.records if k in x])
         return res | self.data
-        
+
     def agg(self, func):
         if func == "worst":
             res = self.apply(**{".*_mse": np.max, ".*_psnr": np.min, ".*_ber": np.max})
@@ -117,29 +131,40 @@ class DatabaseContext:
 
 
 class Database(DatabaseContext):
-    def __init__(self):
+    def __init__(self, filepath: Path = None, dump_all=False):
         super().__init__(None, ChainMap())
-        self.orig_records = []
-        self.fieldnames = []
-    
-    def load(self, path):
-        with open(path, "r", newline="") as f:
+        self._filepath = filepath
+        self._dump_all = dump_all
+        self._stored_records = []
+        self._fieldnames = []
+
+    def load(self):
+        with open(self._filepath, "r", newline="") as f:
             reader = csv.DictReader(f)
-            self.orig_records = list(reader)
-            self.fieldnames = reader.fieldnames
-                
-    def dump(self, path):
-        self.save()
-        with open(path, "w", newline="") as f:
-            writer = csv.DictWriter(f, self.fieldnames, extrasaction="ignore")
+            self._stored_records = list(reader)
+            self._fieldnames = reader.fieldnames
+
+    def dump(self):
+        self.save()  # has no effect if already saved
+
+        if self._dump_all:
+            fieldnames = set()
+            for r in self._stored_records:
+                for k in r:
+                    fieldnames.add(k)
+        else:
+            fieldnames = self._fieldnames
+
+        with open(self._filepath, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames, extrasaction="ignore")
             writer.writeheader()
-            writer.writerows(self.orig_records)
-        
+            writer.writerows(self._stored_records)
+
     def save(self):
         for r in self.records:
             r = {k: str(v) for k, v in r.items()}
-            for orr in self.orig_records:
-                for f in self.fieldnames:
+            for orr in self._stored_records:
+                for f in self._fieldnames:
                     if f in KEY_FIELDS and orr.get(f) != r.get(f):
                         break
                 else:
@@ -147,10 +172,20 @@ class Database(DatabaseContext):
                     break
             else:
                 # didn't find a match
-                self.orig_records.append(dict(r))
+                self._stored_records.append(r)
 
         self.records = []
-        
+
+    def __enter__(self):
+        if self._filepath is not None:
+            self.load()
+        return self
+
+    def __exit__(self, *_):
+        self.save()
+        if self._filepath is not None:
+            self.dump()
+
     # def save(self):
     #     self.results = []
     #     for r in self.records:

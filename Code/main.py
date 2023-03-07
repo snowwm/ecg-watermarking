@@ -20,6 +20,7 @@ def make_parser():
     parser = ArgumentParser(description="Medical timeseries watermarking tool.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="_debug")
     parser.add_argument("-d", "--data-file", type=Path)
+    parser.add_argument("--data-all", action="store_true")
     subp = parser.add_subparsers(required=True)
 
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
@@ -231,9 +232,8 @@ def read_edf(path, db, chan):
 
 parser = make_parser()
 args = parser.parse_args()
-db = Database()
-if args.data_file:
-    db.load(args.data_file)
+db = Database(args.data_file, dump_all=args.data_all)
+with db:
 args.func(args, db)
 if args.data_file:
     db.dump(args.data_file)
