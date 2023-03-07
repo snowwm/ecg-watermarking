@@ -4,22 +4,23 @@
 Встраиваются 128 случайных байт.
 
 Команды эксперимента:
-python ../../Code/main.py research -c 0 -a lsb -n 0.3 -r 1 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 0.3 -r 1 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 0.3 -r 3 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 0.3 -r 3 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 0.3 -r 5 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 0.3 -r 5 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 0.3 -r 9 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 0.3 -r 9 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 1 -r 1 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 1 -r 1 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 1 -r 3 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 1 -r 3 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 1 -r 5 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 1 -r 5 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a lsb -n 1 -r 9 -d res.csv wm128.bin eeg.edf
-python ../../Code/main.py research -c 0 -a de -n 1 -r 9 -d res.csv wm128.bin eeg.edf
+alias w='python ../../Code/main.py research -d res.csv -c 0 --wm-len 128 --seed 666'
+w -a lsb -n 0.3 -r 1 ../eeg3.edf
+w -a de -n 0.3 -r 1 ../eeg3.edf
+w -a lsb -n 0.3 -r 3 ../eeg3.edf
+w -a de -n 0.3 -r 3 ../eeg3.edf
+w -a lsb -n 0.3 -r 5 ../eeg3.edf
+w -a de -n 0.3 -r 5 ../eeg3.edf
+w -a lsb -n 0.3 -r 9 ../eeg3.edf
+w -a de -n 0.3 -r 9 ../eeg3.edf
+w -a lsb -n 1 -r 1 ../eeg3.edf
+w -a de -n 1 -r 1 ../eeg3.edf
+w -a lsb -n 1 -r 3 ../eeg3.edf
+w -a de -n 1 -r 3 ../eeg3.edf
+w -a lsb -n 1 -r 5 ../eeg3.edf
+w -a de -n 1 -r 5 ../eeg3.edf
+w -a lsb -n 1 -r 9 ../eeg3.edf
+w -a de -n 1 -r 9 ../eeg3.edf
 
 Выводы:
 1. При дисперсии шума 0.3 искажаются лишь немногие отсчёты, большинство искажений округляется до 0 (сигналы ведь целочисленные). В этом случае в алгоритме LSB с ростом избыточности снижается BER до 0, как и ожидалось.

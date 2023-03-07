@@ -6,10 +6,11 @@
 Следует отметить, что PSNR здесь считается не особо корректно, так как диапазон сигнала принят равным +-32к (как указано в метаданных файла). Реально же он в десятки раз меньше. Поэтому, думаю, придётся всё равно как-то по-другому считать PSNR. По фактическим экстремумам, например.
 
 Команды эксперимента:
-python ../../Code/main.py research -a lsb -d res-lsb.csv wm128.bin s*
-python ../../Code/main.py research -a lsb --block-len 3 -d res-lsb.csv wm128.bin s*
-python ../../Code/main.py research -a de -d res-de.csv wm128.bin s*
-python ../../Code/main.py research -a de --block-len 3 -d res-de.csv wm128.bin s*
+alias w='python ../../Code/main.py research --wm-len 128 --seed 666'
+w -a lsb -d res-lsb.csv s*
+w -a lsb --block-len 3 -d res-lsb.csv s*
+w -a de -d res-de.csv s*
+w -a de --block-len 3 -d res-de.csv s*
 
 Выводы:
 1. DE абсолютно точно восстанавливает исходный сигнал, так как все значения отсчётов далеки от границ диапазона.

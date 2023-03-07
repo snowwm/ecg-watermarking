@@ -1,9 +1,10 @@
-/*
-!/.gitignore
-!/Code
-!/Data
-!/Libs
-
 __pycache__
 .env
-*.edf
+/*
+
+!/.gitignore
+!/Code
+
+!/Data
+/Data/*
+!/Data/exp*
