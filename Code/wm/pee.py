@@ -1,40 +1,51 @@
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-from wm import WMBase
-            
+import errors
 
-class PEEEmbedder(WMBase):
+from .base import WMBase
+
+
+class PEEBase(WMBase):
+    packed_block_type = np.uint8
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        assert self.contiguous
-        
+        if not self.contiguous:
+            raise errors.InvalidConfig(suffix="non-contiguous mode not supported")
+        if self.block_len > 8:
+            raise errors.InvalidConfig(suffix="block_len > 8 not supported")
+
     def check_range(self):
         # Will check each element individually when embedding.
         return True
-        
+
     def embed_chunk(self, wm, coords):
-        s = self.carrier  #.astype(np.int64)
+        s = self.carrier
         self.init_predictor(s)
-        wmf = wm.flat
 
         for i in range(wm.size):
             j = coords[i]
-            s[j] = 2 * s[j] - self.predict(j) + wmf[i]
+            p = self.predict(j).astype(np.int64)
+            e = (s[j] - p) << self.block_len
+            if not (self.carr_range[0] <= p + e <= self.carr_range[1]):
+                raise errors.InsufficientContainerRange(suffix="dynamic")
+            s[j] = p + e + wm[i]
 
         return wm.size
-            
+
     def extract_chunk(self, wm, coords):
-        s = self.restored  #.astype(np.int64)
+        s = self.restored
         self.init_predictor(s)
-        wmf = wm.flat
-        
+
         for i in range(wm.size)[::-1]:
             j = coords[i]
-            err = s[j] - self.predict(j)
-            wmf[i] = err & 1
-            s[j] -= (err >> 1) + wmf[i]
-        
+            p = self.predict(j)
+            e = s[j] - p
+            wm[i] = e & ((1 << self.block_len) - 1)
+            e >>= self.block_len
+            s[j] = e + p
+
         return wm.size
 
     def init_predictor(self, seq):
@@ -44,7 +55,9 @@ class PEEEmbedder(WMBase):
         raise NotImplementedError()
 
 
-class NeighorsPEE(PEEEmbedder):
+class NeighorsPEE(PEEBase):
+    codename = "pee-n"
+
     def __init__(self, pee_neighbors=2, **kwargs) -> None:
         """
         pee_neigbors - number of neighbors *on each side* that will be used
@@ -52,7 +65,7 @@ class NeighorsPEE(PEEEmbedder):
         """
         super().__init__(**kwargs)
         self.pee_neighbors = pee_neighbors
-    
+
     def get_coords(self, carr):
         nc = self.pee_neighbors
         return np.arange(nc, len(carr) - nc)
@@ -66,7 +79,9 @@ class NeighorsPEE(PEEEmbedder):
         return (np.sum(self.pred_neigh[i - nc]) - self.pred_seq[i]) // (nc * 2)
 
 
-class SiblingChannelPEE(PEEEmbedder):
+class SiblingChannelPEE(PEEBase):
+    codename = "pee-s"
+
     def __init__(self, pee_ref_channel=0, **kwargs) -> None:
         """
         pee_ref_channel - the channel used to predict other channels
@@ -74,10 +89,10 @@ class SiblingChannelPEE(PEEEmbedder):
         super().__init__(**kwargs)
         self.pee_ref_channel = pee_ref_channel
 
-    def set_edf(self, edf):
-        super().set_edf(edf)
-        self.pred_seq = edf.signals[self.pee_ref_channel]
-    
+    def set_data(self, data):
+        super().set_data(data)
+        self.pred_seq = data.signals[self.pee_ref_channel]
+
     def get_coords(self, carr):
         return np.arange(len(carr))
 

@@ -1,11 +1,15 @@
-from wm import WMBase, np
-            
+import numpy as np
+
+from .base import WMBase
+
 
 class LSBEmbedder(WMBase):
+    codename = "lsb"
+
     def __init__(self, lsb_lowest_bit=0, **kwargs):
         super().__init__(**kwargs)
         self.lsb_lowest_bit = lsb_lowest_bit
-        
+
     def check_range(self):
         hi_bit = self.lsb_lowest_bit + self.block_len
         if np.iinfo(self.container.dtype).min == 0:
@@ -13,53 +17,54 @@ class LSBEmbedder(WMBase):
             min = 0
             max = 2**hi_bit - 1
         else:
-            min = 2**(hi_bit - 1) * -1
-            max = 2**(hi_bit - 1) - 1
-        
+            min = 2 ** (hi_bit - 1) * -1
+            max = 2 ** (hi_bit - 1) - 1
+
         return min >= self.carr_range[0] and max <= self.carr_range[1]
-    
+
     def get_coords(self, carr):
         coords = np.arange(len(carr))
         if not self.contiguous:
             self.rng.shuffle(coords)
         return coords
-        
+
     def embed_chunk(self, wm, coords):
         # We iterate on block_len, i.e. the number of bits per block
         # which should be small enough.
-        
+
         for i in range(wm.shape[1]):
             j = self.lsb_lowest_bit + i
             bit = 1 << j
             cont = (self.container[coords] & bit) >> j
-            wm = self.embed_plane(j, wm[:, i], cont)
-            set_plane(self.carrier, wm, bit, coords)
-            
+            plane = self.embed_plane(j, wm[:, i], cont)
+            set_plane(self.carrier, plane, bit, coords)
+
         return wm.size
 
     def embed_plane(self, bit_num, wm, cont):
         return wm
-            
+
     def extract_chunk(self, wm, coords):
         for i in range(wm.shape[1]):
             j = self.lsb_lowest_bit + i
             bit = 1 << j
             carr = (self.carrier[coords] & bit) >> j
-            wm_, restored = self.extract_plane(j, carr)
-            wm[:, i] = wm_
+            plane, restored = self.extract_plane(j, len(wm), carr)
+            wm[:, i] = plane
 
             if restored is not None:
                 set_plane(self.restored, restored, bit, coords)
-            
+
         return wm.size
 
-    def extract_plane(self, bit_num, carr):
+    def extract_plane(self, bit_num, wm_len, carr):
         return carr, None
-    
+
     def format_array(self, arr, type_):
         if type_ == "carr":
-            arr = list(map(np.binary_repr, arr))
-        return arr
+            type_ = "bin"
+        return super().format_array(arr, type_)
+
 
 def set_plane(arr, content, bit, coords):
     coords_0 = coords[content == 0]

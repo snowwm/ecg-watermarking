@@ -6,12 +6,8 @@ import numpy as np
 
 from db import Database
 from records import load_record_file
-from wm_lsb import LSBEmbedder
-from wm_lcb import LCBEmbedder
-from wm_de import DEEmbedder
-from wm_pee import NeighorsPEE, SiblingChannelPEE
-from wm_itb import ITBEmbedder
 import util
+import wm
 
 DEFAULT_KEY = "ВечностьПахнетНефтью"
         
@@ -76,7 +72,12 @@ def make_parser():
 def add_common_args(p):
     # Common WM params.
     p.add_argument("-c", "--channel", type=int, default=-1)
-    p.add_argument("-a", "--algo", choices=("lsb", "lcb", "de", "pee-n", "pee-c", "itb"), default="lsb")
+    p.add_argument(
+        "-a",
+        "--algo",
+        choices=("lsb", "lcb", "de", "pee-n", "pee-s", "itb"),
+        default="lsb",
+    )
 
     # Common embedder params.
     p.add_argument("-k", "--key", default=DEFAULT_KEY, dest="_key")
@@ -96,7 +97,9 @@ def add_common_args(p):
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
     # Here we need to explicitly specify default=None, otherwise store_true sets it to False.
-    p.add_argument("--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift")
+    p.add_argument(
+        "--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift"
+    )
     p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
 
     # PEE params.
@@ -133,9 +136,13 @@ def add_noise(args, db):
 
 
 def do_wm(args, db):
+    for algo in wm.all_algorithms:
+        if algo.codename == args.algo:
+            wm_class = algo
 
-    wm_params = {k[1:]: v for k, v in vars(args).items()
-        if k.startswith("_") and v is not None}
+    wm_params = {
+        k[1:]: v for k, v in vars(args).items() if k.startswith("_") and v is not None
+    }
     worker = wm_class(**wm_params)
     db.set(**wm_params, algo=args.algo)
     start_time = time.perf_counter()

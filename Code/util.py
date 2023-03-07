@@ -13,6 +13,8 @@ class Random(np.random.Generator):
             seed = self.default_seed
         if isinstance(seed, str):
             seed = seed.encode()
+        if isinstance(seed, bytes):
+            seed = list(seed)
         super().__init__(np.random.PCG64(seed))
 
     def signal(
@@ -100,6 +102,10 @@ def bits_to_ndarray(bits, shape=None, *, dtype=np.uint8, bit_depth=None):
     bps = dtype().itemsize * 8
     if bit_depth is not None and bit_depth != bps:
         assert bit_depth < bps
+        pad_width = bit_depth - (len(bits) % bit_depth)
+        if pad_width != bit_depth:
+            bits = np.pad(bits, (0, pad_width))
+
         bits = bits.reshape(-1, bit_depth)
         pad_shape = len(bits), bps - bit_depth
         pad = np.zeros(pad_shape, dtype=np.uint8)
