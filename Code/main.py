@@ -1,9 +1,9 @@
 from argparse import ArgumentParser
 from pathlib import Path
-import time
 
 import numpy as np
 
+import coding
 from db import Database
 from records import load_record_file
 import util
@@ -83,6 +83,7 @@ def add_common_args(p):
         choices=("lsb", "lcb", "de", "pee-n", "pee-s", "itb"),
         default="lsb",
     )
+    p.set_defaults(coder=None)
 
     # Common embedder params.
     p.add_argument("-k", "--key", default=DEFAULT_KEY, dest="_key")
@@ -91,13 +92,9 @@ def add_common_args(p):
     p.add_argument("-r", "--redundancy", type=int, dest="_redundancy")
     p.add_argument("-b", "--block-len", type=int, dest="_block_len")
 
-    # LSB params.
-    p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
-
-    # LCB params.
-    p.add_argument("--lcb-coder", choices=["rle"], dest="_lcb_coder")
-    p.add_argument("--lcb-transform", choices=["dct", "dwt"], dest="_lcb_transform")
-    p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
+    # Coder params.
+    p.add_argument("--coder-transform", choices=["dct", "dwt"], dest="_coder_transform")
+    p.add_argument("--coder-bitness", type=int, dest="_coder_bitness")
 
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
@@ -106,6 +103,12 @@ def add_common_args(p):
         "--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift"
     )
     p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
+
+    # LCB params.
+    p.add_argument("--coder", choices=["rle", "huff", "mock"], default="rle")
+
+    # LSB params.
+    p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
 
     # PEE params.
     p.add_argument("--pee-neigbors", type=int, dest="_pee_neigbors")
@@ -145,16 +148,12 @@ def add_noise(args, db):
 
 
 def do_wm(args, db):
-    for algo in wm.all_algorithms:
-        if algo.codename == args.algo:
-            wm_class = algo
-
+    wm_class = make_algo(args.algo, args.coder)
     wm_params = {
         k[1:]: v for k, v in vars(args).items() if k.startswith("_") and v is not None
     }
     worker = wm_class(**wm_params)
     db.set(**wm_params, algo=args.algo)
-    start_time = time.perf_counter()
 
     if args.action == "research":
         if args.wm_file is not None:
@@ -225,9 +224,16 @@ def do_wm(args, db):
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 rec.extract_watermark(worker, dbc, orig_wm=orig_wm)
 
-    elapsed = time.perf_counter() - start_time
-    print(f"Elapsed time: {elapsed:.2} s")
-    db.set(elapsed_time=elapsed)
+    print(f"Elapsed time: {db.get('elapsed'):.2} s")
+
+
+def make_algo(*codenames):
+    type_name = "_".join(codenames + "algo")
+    bases = []
+    for algo in wm.all_algorithms + coding.all_algorithms:
+        if algo.codename in codenames:
+            bases.append(algo)
+    return type(type_name, bases)
 
 
 parser = make_parser()

@@ -4,6 +4,7 @@ __pycache__
 
 !/.gitignore
 !/Code
+/Code/libs
 
 !/Data
 /Data/*

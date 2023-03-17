@@ -4,6 +4,7 @@ import csv
 from numbers import Number
 from pathlib import Path
 import re
+import time
 from typing import Callable, Mapping
 
 import numpy as np
@@ -60,10 +61,16 @@ class DatabaseContext:
             self.parent.records.append(self.data)
 
     def __enter__(self):
+        self.start_time = time.perf_counter()
         return self
 
     def __exit__(self, *_):
+        elapsed = time.perf_counter() - self.start_time
+        self.set(elapsed=elapsed)
         self.save()
+
+    def get(self, key, default=None):
+        return self.data.get(key, default)
 
     def set(self, prefix=None, print=False, **props):
         if prefix is None:

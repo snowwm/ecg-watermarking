@@ -34,8 +34,10 @@ class WMBase:
         contiguous=True,
         redundancy=1,
         block_len=1,
-        debug=False
+        debug=False,
+        **kwargs,
     ):
+        super().__init__(**kwargs)
         self.key = key
         self.wm_len = wm_len
         self.shuffle = shuffle
@@ -70,7 +72,7 @@ class WMBase:
         self.carrier = self.container.copy()
         coords = self.get_coords(self.container)
         wm = self.preprocess_wm(self.watermark)
-        
+
         self.debug("Orig carr", self.container, "carr")
         self.debug("Orig wm", self.watermark, "wm")
         self.debug("Prep wm", wm, "wm")

@@ -17,6 +17,9 @@ class Random(np.random.Generator):
             seed = list(seed)
         super().__init__(np.random.PCG64(seed))
 
+    def bits(self, size):
+        return self.integers(0, 2, size)
+
     def signal(
         self,
         size,
@@ -117,16 +120,16 @@ def bits_to_ndarray(bits, shape=None, *, dtype=np.uint8, bit_depth=None):
     return res
 
 
-def bits_to_bytes(bits):
-    return bits_to_ndarray(bits).tobytes()
+def bits_to_bytes(bits, **kwargs):
+    return bits_to_ndarray(bits, **kwargs).tobytes()
 
 
-def bits_to_str(bits):
-    return bits_to_bytes(bits).decode("utf-8")
+def bits_to_str(bits, **kwargs):
+    return bits_to_bytes(bits, **kwargs).decode("utf-8")
 
 
-def bits_to_int(bits):
-    return int.from_bytes(bits_to_bytes(bits), sys.byteorder)
+def bits_to_int(bits, **kwargs):
+    return int.from_bytes(bits_to_bytes(bits, **kwargs), sys.byteorder)
 
 
 # Other utilities.
