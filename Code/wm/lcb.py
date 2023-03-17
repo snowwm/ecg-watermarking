@@ -1,6 +1,6 @@
 import numpy as np
 
-from coding import MockCoder
+from coding.base import BaseCoder
 import errors
 import util
 
@@ -9,7 +9,7 @@ from .lsb import LSBEmbedder
 SIZE_BITNESS = 32
 
 
-class LCBEmbedder(LSBEmbedder, MockCoder):
+class LCBEmbedder(LSBEmbedder):
     codename = "lcb"
     max_restore_error = 0
     test_matrix = {
@@ -17,7 +17,13 @@ class LCBEmbedder(LSBEmbedder, MockCoder):
         "redundancy": [1],
         "contiguous": [True],
         "lsb_lowest_bit": [5, 6],
+        "coder": ["mock"],
     }
+
+    @classmethod
+    def new(cls, coder="rle", mixins=[], **kwargs):
+        mixins = *mixins, BaseCoder.find_subclass(coder)
+        return super().new(mixins=mixins, **kwargs)
 
     def make_coords_chunk(self, coords, start, need):
         if start >= len(coords):

@@ -1,10 +1,10 @@
 import wfdb
 import wfdb.io._signal as wfdb_sig
 
-from .record import Record
+from .base import BaseRecord
 
 
-class WFDBFile(Record):
+class WFDBFile(BaseRecord):
     # For now, we do not support multi-segment files.
 
     def load_data(self, path):

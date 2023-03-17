@@ -6,7 +6,7 @@ from db import DatabaseContext
 import util
 
 
-class Record:
+class BaseRecord:
     # IO and state manupulation.
 
     def __init__(self, db=None) -> None:
@@ -149,6 +149,7 @@ class Record:
                     prefix="embed",
                     print=True,
                 )
+                dbc.set(**embedder.stats())
 
     def extract_watermark(self, extractor, *, orig_wm=None, orig_carr=None):
         print(f"\nExtracting watermark...")

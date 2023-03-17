@@ -29,7 +29,7 @@ class LSBEmbedder(WMBase):
     def get_coords(self, carr):
         coords = np.arange(len(carr))
         if not self.contiguous:
-            self.rng.shuffle(coords)
+            self.rng().shuffle(coords)
         return coords
 
     def embed_chunk(self, wm, coords):

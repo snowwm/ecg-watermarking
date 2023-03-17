@@ -1,10 +1,10 @@
 import pyedflib
 import pyedflib.highlevel
 
-from .record import Record
+from .base import BaseRecord
 
 
-class EDFFile(Record):
+class EDFFile(BaseRecord):
     def load_data(self, path):
         res = pyedflib.highlevel.read_edf(str(path), digital=True)
 

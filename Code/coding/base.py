@@ -2,17 +2,36 @@ from fractions import Fraction
 
 import numpy as np
 
+from algo_base import AlgoBase
 import util
 
 
-class BaseCoder:
+class BaseCoder(AlgoBase):
     def __init__(self, coder_transform=None, **kwargs):
         super().__init__(**kwargs)
+        # TODO add transforms
         self.transform = coder_transform
+        self._total_orig = 0
+        self._total_compressed = 0
+
+    @property
+    def mean_comp_rate(self):
+        return np.divide(self._total_compressed / self._total_orig)
+
+    def stats(self):
+        res = super().stats()
+        res.update(comp_rate=self.mean_comp_rate)
+        return res
 
     def encode(self, seq):
         res = self.do_encode(seq)
-        print(f"{type(self).__name__}: compression rate {len(res) / len(seq) :.2f}")
+
+        self._total_orig += len(seq)
+        self._total_compressed += len(res)
+
+        comp_rate = len(res) / len(seq)
+        self.debug(f"{type(self).__name__}: compression rate {comp_rate:.2f}")
+
         return res
 
     def do_encode(self, seq):
@@ -22,7 +41,7 @@ class BaseCoder:
         raise NotImplementedError()
 
     def test(self):
-        seq = np.random.randint(0, 2, 100)
+        seq = self.rng.randint(0, 2, 100)
         print(seq)
         res = self.decode(self.encode(seq))
         print(res)
@@ -41,7 +60,7 @@ class MockCoder(BaseCoder):
         self.store.append(seq)
         comp_len = max(8, int(len(seq) * self.comp_rate))
         header = util.to_bits(len(self.store) - 1, bit_depth=8)
-        pad = util.Random().bits(comp_len - 8)
+        pad = self.rng.bits(comp_len - 8)
         return np.concatenate((header, pad))
 
     def decode(self, bits):

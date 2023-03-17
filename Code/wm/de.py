@@ -40,10 +40,10 @@ class DEEmbedder(WMBase):
     def get_coords(self, carr):
         c1 = np.arange(0, len(carr) - self.de_shift, self.de_shift + 1)
         if not self.contiguous:
-            self.rng.shuffle(c1)
+            self.rng().shuffle(c1)
 
         if self.de_rand_shift:
-            c2 = c1 + self.rng.integers(1, 1 + self.de_shift, len(c1))
+            c2 = c1 + self.rng().integers(1, 1 + self.de_shift, len(c1))
         else:
             c2 = c1 + self.de_shift
 

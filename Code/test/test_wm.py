@@ -7,7 +7,7 @@ import util
 import wm
 
 
-def test_algo(cls, debug=False, only_skipped=False, force=False):
+def test_algo(cls, verbose=False, only_skipped=False, force=False):
     cls_name = cls.__name__
     matrix = cls.get_test_matrix()
     matrix = [[(k, v) for v in vs] for k, vs in matrix.items()]
@@ -37,7 +37,7 @@ def test_algo(cls, debug=False, only_skipped=False, force=False):
         cont = rng.signal(cont_len, noise_var=5, dtype=np.int8)
 
         try:
-            worker = cls(**c, key=key, debug=debug)
+            worker = cls.new(**c, key=key, verbose=verbose)
             worker.set_container(cont)
             worker.set_watermark(wm)
 

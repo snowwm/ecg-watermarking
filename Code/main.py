@@ -3,18 +3,16 @@ from pathlib import Path
 
 import numpy as np
 
-import coding
+from algo_base import AlgoBase
 from db import Database
 from records import load_record_file
 import util
 import wm
 
-DEFAULT_KEY = "ВечностьПахнетНефтью"
-
 
 def make_parser():
     parser = ArgumentParser(description="Medical timeseries watermarking tool.")
-    parser.add_argument("-v", "--verbose", action="store_true", dest="_debug")
+    parser.add_argument("-v", "--verbose", action="store_true", dest="_verbose")
     parser.add_argument("-d", "--data-file", type=Path)
     parser.add_argument("--data-all", action="store_true")
     parser.add_argument("--seed")
@@ -83,10 +81,9 @@ def add_common_args(p):
         choices=("lsb", "lcb", "de", "pee-n", "pee-s", "itb"),
         default="lsb",
     )
-    p.set_defaults(coder=None)
 
     # Common embedder params.
-    p.add_argument("-k", "--key", default=DEFAULT_KEY, dest="_key")
+    p.add_argument("-k", "--key", dest="_key")
     p.add_argument("-s", "--shuffle", action="store_true", dest="_shuffle")
     p.add_argument("-C", "--non-contiguous", action="store_false", dest="_contiguous")
     p.add_argument("-r", "--redundancy", type=int, dest="_redundancy")
@@ -105,7 +102,9 @@ def add_common_args(p):
     p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
 
     # LCB params.
-    p.add_argument("--coder", choices=["rle", "huff", "mock"], default="rle")
+    p.add_argument(
+        "--coder", choices=["rle", "huff", "mock"], dest="_coder"
+    )
 
     # LSB params.
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
@@ -118,9 +117,13 @@ def add_common_args(p):
 def test(args, db):
     from test import test_wm
 
-    for algo in wm.all_algorithms:
-        if args.algo is None or algo.codename in args.algo:
-            test_wm.test_algo(algo, debug=args._debug, only_skipped=args.only_skipped)
+    if args.algo is None:
+        algos = wm.WMBase.get_subclasses()
+    else:
+        algos = [wm.WMBase.find_subclass(algo) for algo in args.algo.split(",")]
+
+    for algo in algos:
+        test_wm.test_algo(algo, verbose=args._verbose, only_skipped=args.only_skipped)
 
 
 def file_info(args, db):
@@ -148,12 +151,11 @@ def add_noise(args, db):
 
 
 def do_wm(args, db):
-    wm_class = make_algo(args.algo, args.coder)
     wm_params = {
         k[1:]: v for k, v in vars(args).items() if k.startswith("_") and v is not None
     }
-    worker = wm_class(**wm_params)
     db.set(**wm_params, algo=args.algo)
+    worker = AlgoBase.find_subclass(args.algo).new(**wm_params)
 
     if args.action == "research":
         if args.wm_file is not None:
@@ -225,15 +227,6 @@ def do_wm(args, db):
                 rec.extract_watermark(worker, dbc, orig_wm=orig_wm)
 
     print(f"Elapsed time: {db.get('elapsed'):.2} s")
-
-
-def make_algo(*codenames):
-    type_name = "_".join(codenames + "algo")
-    bases = []
-    for algo in wm.all_algorithms + coding.all_algorithms:
-        if algo.codename in codenames:
-            bases.append(algo)
-    return type(type_name, bases)
 
 
 parser = make_parser()

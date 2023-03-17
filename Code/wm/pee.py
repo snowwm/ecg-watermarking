@@ -108,7 +108,7 @@ class SiblingChannelPEE(PEEBase):
     def predict(self, i):
         return self.pred_seq[i]
 
-    # This class doesn't support tests currently.
+    # FIXME This class doesn't support tests currently.
     @classmethod
     def get_test_matrix(cls):
         return {}

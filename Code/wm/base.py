@@ -1,11 +1,11 @@
 import numpy as np
 
+from algo_base import AlgoBase
 import errors
 import util
 
 
-class WMBase:
-    codename: str = None
+class WMBase(AlgoBase):
     max_restore_error = None
 
     # When this is None, each block will be represented as an array of bits.
@@ -28,23 +28,19 @@ class WMBase:
     def __init__(
         self,
         *,
-        key=None,
         wm_len=None,
         shuffle=False,
         contiguous=True,
         redundancy=1,
         block_len=1,
-        debug=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.key = key
         self.wm_len = wm_len
         self.shuffle = shuffle
         self.contiguous = contiguous
         self.redundancy = redundancy
         self.block_len = block_len
-        self._debug = debug
         self.unpacked_wm_len = None
 
     def set_container(self, cont, carr_range=None):
@@ -73,7 +69,7 @@ class WMBase:
         coords = self.get_coords(self.container)
         wm = self.preprocess_wm(self.watermark)
 
-        self.debug("Orig carr", self.container, "carr")
+        # self.debug("Orig carr", self.container, "carr")
         self.debug("Orig wm", self.watermark, "wm")
         self.debug("Prep wm", wm, "wm")
 
@@ -95,7 +91,7 @@ class WMBase:
             wm_done += done
             wm_need -= done
 
-        self.debug("Fill carr", self.carrier, "carr")
+        # self.debug("Fill carr", self.carrier, "carr")
         return self.carrier
 
     def extract(self):
@@ -131,8 +127,8 @@ class WMBase:
 
         self.debug("Raw wm", wm, "wm")
         self.debug("Post wm", self.extracted, "wm")
-        self.debug("Fill carr", self.carrier, "carr")
-        self.debug("Rest carr", self.restored, "carr")
+        # self.debug("Fill carr", self.carrier, "carr")
+        # self.debug("Rest carr", self.restored, "carr")
         return self.extracted
 
     def alloc_wm(self, size):
@@ -147,7 +143,7 @@ class WMBase:
             wm = np.repeat(wm, self.redundancy)
 
         if self.shuffle:
-            self.rng.shuffle(wm)
+            self.rng().shuffle(wm)
 
         self.unpacked_wm_len = len(wm)
 
@@ -163,7 +159,7 @@ class WMBase:
             wm = util.to_bits(wm, bit_depth=self.block_len)[: self.unpacked_wm_len]
 
         if self.shuffle:
-            perm = self.rng.permutation(len(wm))
+            perm = self.rng().permutation(len(wm))
             wm1 = np.empty_like(wm)
             wm1[perm] = wm
             wm = wm1
@@ -224,28 +220,3 @@ class WMBase:
     def extract_chunk(self, wm, coords):
         """Same comments as above."""
         raise NotImplementedError()
-
-    # Utility methods.
-
-    @property
-    def rng(self):
-        return util.Random(self.key)
-
-    def debug(self, prefix, arr, type_=None):
-        if not self._debug:
-            return
-        print(prefix + ":", self.format_array(arr, type_))
-
-    def format_array(self, arr, type_):
-        """Used for debug printing."""
-        if type_ == "bin":
-            arr = list(map(lambda x: np.binary_repr(x, width=0), arr))
-        return arr
-
-    @classmethod
-    def get_test_matrix(cls):
-        m = {}
-        for c in reversed(cls.__mro__):
-            if issubclass(c, WMBase):
-                m |= c.test_matrix
-        return m
