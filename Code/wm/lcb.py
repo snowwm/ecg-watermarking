@@ -34,9 +34,10 @@ class LCBEmbedder(LSBEmbedder):
         compressed = self.encode(cont)
         size = util.to_bits(compressed.size, bit_depth=SIZE_BITNESS)
         total_size = size.size + compressed.size + wm.size
-        # print(cont.size, compressed.size)
         if total_size > cont.size:
-            raise errors.CantEmbed(suffix="insufficient compression")
+            raise errors.CantEmbed(
+                suffix=f"insufficient compression saving {self.mean_comp_saving}"
+            )
         pad = cont[total_size:]
         return np.concatenate([size, compressed, wm, pad])
 

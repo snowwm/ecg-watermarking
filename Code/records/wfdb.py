@@ -30,9 +30,7 @@ class WFDBFile(BaseRecord):
         self._record.wrsamp(write_dir=str(path.parent), expanded=True)
 
     def dig_range(self, chan):
-        from wfdb.io import _signal as wfdb_sig
-
-        return wfdb_sig.SAMPLE_VALUE_RANGE[self.fmt[chan]]
+        return wfdb_sig.SAMPLE_VALUE_RANGE[self._record.fmt[chan]]
 
     def phys_range(self, chan):
         gain = self._record.adc_gain[chan]

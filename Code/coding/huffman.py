@@ -8,23 +8,27 @@ from . import BaseCoder
 class HuffmanCoder(BaseCoder):
     codename = "huff"
 
-    def __init__(self, coder_bitness=4, **kwargs):
+    def __init__(self, huff_sym_size=4, huff_dpcm=False, **kwargs):
         super().__init__(**kwargs)
-        self.bitness = coder_bitness
+        self.sym_size = huff_sym_size
+        self.use_dpcm = huff_dpcm
+        self.alpha_range = 0, 2**self.sym_size - 1
+
+        # Disable progressbar output from libs.huffman.
+        from progress import Infinite  # fmt: skip
+        Infinite.file = None
 
     def do_encode(self, seq):
-        from progress import Infinite  # fmt: skip
-        Infinite.file = None  # disable progressbar output from libs.huffman
-
-        from libs.huffman.adaptive_huffman_coding import AdaptiveHuffman
-
-        seq = util.bits_to_bytes(seq, bit_depth=self.bitness)
-        bitarray = AdaptiveHuffman(seq).encode()
+        seq = util.bits_to_bytes(seq, bit_depth=self.sym_size)
+        bitarray = self.make_coder(seq).encode()
         return np.frombuffer(bitarray.unpack(), dtype=np.uint8)
 
     def decode(self, bits):
-        from libs.huffman.adaptive_huffman_coding import AdaptiveHuffman
+        seq = np.packbits(bits).tobytes()
+        res = self.make_coder(seq).decode()
+        return util.to_bits(np.array(res), bit_depth=self.sym_size)
 
-        bits = np.packbits(bits).tobytes()
-        res = AdaptiveHuffman(bits).decode()
-        return util.to_bits(np.array(res), bit_depth=self.bitness)
+    def make_coder(self, seq):
+        from adaptive_huffman_coding import AdaptiveHuffman
+
+        return AdaptiveHuffman(seq, self.alpha_range, self.use_dpcm)

@@ -5,6 +5,7 @@ import numpy as np
 
 from algo_base import AlgoBase
 from db import Database
+import errors
 from records import load_record_file
 import util
 import wm
@@ -45,7 +46,7 @@ def make_parser():
     p.add_argument("wm_in", type=Path)
     p.add_argument("rec_out", type=Path, nargs="?")
     add_common_args(p)
-    p.set_defaults(func=wm, action="embed")
+    p.set_defaults(func=do_wm, action="embed")
 
     p = subp.add_parser("extract")
     p.add_argument("rec_in", type=Path)
@@ -53,13 +54,13 @@ def make_parser():
     p.add_argument("rec_out", type=Path, nargs="?")
     p.add_argument("-l", "--wm-len", type=int, required=True)
     add_common_args(p)
-    p.set_defaults(func=wm, action="extract")
+    p.set_defaults(func=do_wm, action="extract")
 
     p = subp.add_parser("check")
     p.add_argument("rec_in", type=Path)
     p.add_argument("wm_in", type=Path)
     add_common_args(p)
-    p.set_defaults(func=wm, action="check")
+    p.set_defaults(func=do_wm, action="check")
 
     p = subp.add_parser("research")
     p.add_argument("rec_files", type=Path, nargs="+")
@@ -67,7 +68,7 @@ def make_parser():
     p.add_argument("-l", "--wm-len", type=int)
     p.add_argument("-n", "--noise-var", type=float)
     add_common_args(p)
-    p.set_defaults(func=wm, action="research")
+    p.set_defaults(func=do_wm, action="research")
 
     return parser
 
@@ -91,7 +92,9 @@ def add_common_args(p):
 
     # Coder params.
     p.add_argument("--coder-transform", choices=["dct", "dwt"], dest="_coder_transform")
-    p.add_argument("--coder-bitness", type=int, dest="_coder_bitness")
+    p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
+    p.add_argument("--huff-sym-size", type=int, dest="_huff_sym_size")
+    p.add_argument("--huff-dpcm", action="store_true", default=None, dest="_huff_dpcm")
 
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
@@ -102,9 +105,7 @@ def add_common_args(p):
     p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
 
     # LCB params.
-    p.add_argument(
-        "--coder", choices=["rle", "huff", "mock"], dest="_coder"
-    )
+    p.add_argument("--coder", choices=["rle", "huff", "mock"], dest="_coder")
 
     # LSB params.
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
@@ -160,29 +161,32 @@ def do_wm(args, db):
     if args.action == "research":
         if args.wm_file is not None:
             watermark = args.wm_file.read_bytes()
+            watermark = util.to_bits(watermark)
         elif args.wm_len is not None:
-            watermark = util.Random().bytes(args.wm_len)
+            watermark = util.Random().bits(args.wm_len)
         else:
             parser.error("You must specify one of --wm-len and --wm-file")
 
-        watermark = util.to_bits(watermark)
         worker.set_watermark(watermark)
         worker.wm_len = len(watermark)
         db.set(noise_var=args.noise_var)
 
         for rec_in in args.rec_files:
-            rec = load_record_file(rec_in, db, args.channel)
-            orig_carr = rec.signals.copy()
-            orig_wm = [watermark] * rec.signal_count
+            try:
+                with db.new_ctx() as dbc:
+                    rec = load_record_file(rec_in, dbc, args.channel)
+                    orig_carr = rec.signals.copy()
+                    orig_wm = [watermark] * rec.signal_count
 
-            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                rec.embed_watermark(worker, dbc)
+                    rec.embed_watermark(worker)
 
-            if args.noise_var:
-                rec.add_noise(args.noise_var)
+                    if args.noise_var:
+                        rec.add_noise(args.noise_var)
 
-            with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                rec.extract_watermark(worker, dbc, orig_wm=orig_wm, orig_carr=orig_carr)
+                    rec.extract_watermark(worker, orig_wm=orig_wm, orig_carr=orig_carr)
+            except errors.DynamicError as e:
+                print(f"Skipped ({repr(e)})")
+
             print()
             print()
     else:
@@ -226,14 +230,17 @@ def do_wm(args, db):
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 rec.extract_watermark(worker, dbc, orig_wm=orig_wm)
 
-    print(f"Elapsed time: {db.get('elapsed'):.2} s")
-
 
 parser = make_parser()
 args = parser.parse_args()
 
 util.Random.default_seed = args.seed
 db = Database(args.data_file, dump_all=args.data_all)
+db.load()
+dbc = db.new_ctx(aggregs=["mean", "worst"])
 
-with db:
-    args.func(args, db)
+with dbc:
+    args.func(args, dbc)
+
+print(f"All done! Elapsed time: {dbc.get('elapsed'):.2f} s")
+db.dump()

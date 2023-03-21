@@ -31,9 +31,7 @@ def test_algo(cls, verbose=False, only_skipped=False, force=False):
 
         wm_len, cont_len = c.pop("wm_cont_len")
         c["wm_len"] = wm_len
-        wm = util.to_bits(rng.bytes((wm_len + 7) // 8))[:wm_len]
-        # We leave some space between the signal extrema and dtype limits.
-        # This space is needed for expansion methods.
+        wm = rng.bits(wm_len)
         cont = rng.signal(cont_len, noise_var=5, dtype=np.int8)
 
         try:
@@ -54,8 +52,7 @@ def test_algo(cls, verbose=False, only_skipped=False, force=False):
             if not only_skipped:
                 print("OK")
         except (
-            errors.InvalidConfig,
-            errors.InsufficientContainerRange,
+            errors.StaticError,
             errors.CantEmbed,
         ) as e:
             num_skipped += 1

@@ -9,17 +9,29 @@ class WMError(Exception):
         super().__init__(msg)
 
 
-class InvalidConfig(WMError):
-    msg = "Invalid embedder/extractor configuration"
+class StaticError(WMError):
+    """These errors are raised before actual embedding/extraction starts."""
 
 
-class InsufficientContainerRange(WMError):
+class DynamicError(WMError):
+    """These errors are raised in the course of embedding/extraction."""
+
+
+class InvalidConfig(StaticError):
+    msg = "Invalid algorithm configuration"
+
+
+class InsufficientContainerRangeStatic(StaticError):
     msg = "Insufficient container range"
 
 
-class CantEmbed(WMError):
+class CantEmbed(DynamicError):
     msg = "Insufficient container length or range for this watermark"
 
 
-class CantExtract(WMError):
+class InsufficientContainerRangeDynamic(CantEmbed):
+    msg = "Insufficient container range"
+
+
+class CantExtract(DynamicError):
     msg = "Could not find watermark with given length"

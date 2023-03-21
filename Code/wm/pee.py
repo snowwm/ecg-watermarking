@@ -29,7 +29,7 @@ class PEEBase(WMBase):
             p = self.predict(j).astype(np.int64)
             e = (s[j] - p) << self.block_len
             if not (self.carr_range[0] <= p + e <= self.carr_range[1]):
-                raise errors.InsufficientContainerRange(suffix="dynamic")
+                raise errors.InsufficientContainerRangeDynamic()
             s[j] = p + e + wm[i]
 
         return wm.size
@@ -95,9 +95,9 @@ class SiblingChannelPEE(PEEBase):
         super().__init__(**kwargs)
         self.pee_ref_channel = pee_ref_channel
 
-    def set_data(self, data):
-        super().set_data(data)
-        self.pred_seq = data.signals[self.pee_ref_channel]
+    def set_record(self, rec):
+        super().set_record(rec)
+        self.pred_seq = rec.signals[self.pee_ref_channel]
 
     def get_coords(self, carr):
         return np.arange(len(carr))

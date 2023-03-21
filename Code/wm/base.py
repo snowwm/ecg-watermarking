@@ -51,7 +51,7 @@ class WMBase(AlgoBase):
         self.carr_range = carr_range
 
         if not self.check_range():
-            raise errors.InsufficientContainerRange()
+            raise errors.InsufficientContainerRangeStatic()
 
     def set_carrier(self, carr):
         self.carrier = np.array(carr)
@@ -59,8 +59,8 @@ class WMBase(AlgoBase):
     def set_watermark(self, wm):
         self.watermark = np.array(wm)
 
-    def set_data(self, data):
-        self.data = data
+    def set_record(self, rec):
+        self.record = rec
 
     # Main embedding/extraction methods.
 
@@ -84,7 +84,7 @@ class WMBase(AlgoBase):
             wm_chunk = self.make_wm_chunk(wm, wm_done, wm_need)
             coords_chunk = self.make_coords_chunk(coords, coords_done, len(wm_chunk))
             if coords_chunk is None:
-                raise errors.CantEmbed(suffix="dynamic")
+                raise errors.CantEmbed()
 
             done = self.embed_chunk(wm_chunk, coords_chunk)
             coords_done += len(coords_chunk)

@@ -132,15 +132,15 @@ class BaseRecord:
 
     def embed_watermark(self, embedder):
         print(f"\nEmbedding watermark...")
-        embedder.set_edf(self)
+        embedder.set_record(self)
 
         for c in self.used_channels:
-            print(f"Signal {c}, {self.signal_headers[c]['label']!r}:")
-            rng = self.signal_range(c)
+            print(f"Signal {c}, {self.signal_labels[c]!r}:")
+            rng = self.dig_range(c)
             embedder.set_container(self.signals[c], rng)
             self.signals[c] = embedder.embed()
 
-            with self.db.new_ctx() as dbc:
+            with self.db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 dbc.set(channel=c, **self.signal_info(c))
                 dbc.set_psnr(
                     embedder.carrier,
@@ -154,13 +154,12 @@ class BaseRecord:
     def extract_watermark(self, extractor, *, orig_wm=None, orig_carr=None):
         print(f"\nExtracting watermark...")
         res = []
-        extractor.set_edf(self)
+        extractor.set_record(self)
 
         for c in self.used_channels:
-            print(f"Signal {c}, {self.signal_headers[c]['label']!r}:")
-            s = self.signals[c]
-            rng = self.signal_range(c)
-            extractor.set_carrier(s)
+            print(f"Signal {c}, {self.signal_labels[c]!r}:")
+            rng = self.dig_range(c)
+            extractor.set_carrier(self.signals[c])
             extracted = extractor.extract()
             self.signals[c] = extractor.restored
             res.append(extracted)
@@ -176,6 +175,8 @@ class BaseRecord:
                     dbc.set_ber(orig_wm[c], extracted, prefix="extract", print=True)
 
                 if orig_carr is not None:
-                    dbc.set_psnr(orig_carr[c], s, rng, prefix="restore", print=True)
+                    dbc.set_psnr(
+                        self.signals[c], orig_carr[c], rng, prefix="restore", print=True
+                    )
 
         return res

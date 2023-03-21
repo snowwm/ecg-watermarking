@@ -58,7 +58,7 @@ class DatabaseContext:
                 self.parent.records.append(self.agg(agg))
         else:
             # This is a leaf context.
-            self.parent.records.append(self.data)
+            self.parent.records.append(dict(self.data))
 
     def __enter__(self):
         self.start_time = time.perf_counter()
@@ -122,6 +122,7 @@ class DatabaseContext:
 
             if fallback:
                 res[k] = fallback([x[k] for x in self.records if k in x])
+
         return res | self.data
 
     def agg(self, func):
@@ -138,20 +139,26 @@ class DatabaseContext:
 
 
 class Database(DatabaseContext):
-    def __init__(self, filepath: Path = None, dump_all=False):
-        super().__init__(None, ChainMap())
+    def __init__(self, filepath: Path = None, dump_all=False, **kwargs):
+        super().__init__(None, ChainMap(), **kwargs)
         self._filepath = filepath
         self._dump_all = dump_all
         self._stored_records = []
         self._fieldnames = []
 
     def load(self):
+        if self._filepath is None:
+            return
+
         with open(self._filepath, "r", newline="") as f:
             reader = csv.DictReader(f)
             self._stored_records = list(reader)
             self._fieldnames = reader.fieldnames
 
     def dump(self):
+        if self._filepath is None:
+            return
+
         self.save()  # has no effect if already saved
 
         if self._dump_all:
@@ -172,7 +179,7 @@ class Database(DatabaseContext):
             r = {k: str(v) for k, v in r.items()}
             for orr in self._stored_records:
                 for f in self._fieldnames:
-                    if f in KEY_FIELDS and orr.get(f) != r.get(f):
+                    if f in KEY_FIELDS and orr.get(f, "") != r.get(f, ""):
                         break
                 else:
                     orr |= r
@@ -182,16 +189,6 @@ class Database(DatabaseContext):
                 self._stored_records.append(r)
 
         self.records = []
-
-    def __enter__(self):
-        if self._filepath is not None:
-            self.load()
-        return self
-
-    def __exit__(self, *_):
-        self.save()
-        if self._filepath is not None:
-            self.dump()
 
     # def save(self):
     #     self.results = []

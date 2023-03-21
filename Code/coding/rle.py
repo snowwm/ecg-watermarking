@@ -8,9 +8,9 @@ from . import BaseCoder
 class RLECoder(BaseCoder):
     codename = "rle"
 
-    def __init__(self, coder_bitness=4, **kwargs):
+    def __init__(self, rle_bitness=4, **kwargs):
         super().__init__(**kwargs)
-        self.bitness = coder_bitness
+        self.bitness = rle_bitness
 
     def encode(self, seq):
         bounds = np.nonzero(seq[1:] != seq[:-1])[0] + 1

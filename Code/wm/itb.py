@@ -36,7 +36,7 @@ class ITBEmbedder(WMBase):
         x[1:] += wm
 
         if x.min() < self.carr_range[0] or x.max() > self.carr_range[1]:
-            raise errors.InsufficientContainerRange(suffix="dynamic")
+            raise errors.InsufficientContainerRangeDynamic()
 
         self.carrier[coords] = x
         return wm.size
