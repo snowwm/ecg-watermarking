@@ -32,7 +32,7 @@ class AlgoBase:
 
     @classmethod
     def new(cls, mixins=[], **kwargs):
-        bases = cls, *mixins
+        bases = *mixins, cls
         codenames = [x.codename for x in bases]
         type_name = "_".join([*codenames, "algo"])
         new_type = type(type_name, bases, {})
@@ -54,12 +54,16 @@ class AlgoBase:
 
         self.key = key
         self.verbose = verbose
+        self.record = None
 
     def rng(self):
         return util.Random(self.key)
 
-    def stats(self):
-        return {}
+    def set_record(self, record):
+        self.record = record
+
+    def update_db(self, db):
+        pass
 
     # Debugging.
 
@@ -77,4 +81,6 @@ class AlgoBase:
         """Used for debug printing."""
         if type_ == "bin":
             arr = list(map(lambda x: np.binary_repr(x, width=0), arr))
+        elif type_ == "bits":
+            arr = "".join(map(str, arr))
         return arr

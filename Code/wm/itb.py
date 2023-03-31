@@ -20,9 +20,6 @@ class ITBEmbedder(WMBase):
         if self.block_len != 1:
             raise errors.InvalidConfig(suffix="block_len > 1 not supported")
 
-    def check_range(self):
-        return True
-
     def get_coords(self, carr):
         return np.arange(len(carr))
 

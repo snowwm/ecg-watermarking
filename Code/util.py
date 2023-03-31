@@ -135,6 +135,16 @@ def bits_to_int(bits, **kwargs):
 # Other utilities.
 
 
+def get_bit(arr, bit_num):
+    return (arr & (1 << bit_num)) >> bit_num
+
+
+def set_bit(arr, bit_num, val):
+    bit = 1 << bit_num
+    arr[val == 0] &= ~bit
+    arr[val == 1] |= bit
+
+
 def round(val, mode="round", *, ref=None, dtype=None):
     if ref is not None:
         if isinstance(ref, np.ndarray):
@@ -150,7 +160,15 @@ def round(val, mode="round", *, ref=None, dtype=None):
 
 
 def dtype_info(dtype):
-    if dtype.kind == "f":
+    if dtype.kind in "fc":
         return np.finfo(dtype)
     else:
         return np.iinfo(dtype)
+
+
+def signal_range(signal):
+    signal = np.array(signal)
+    rng = signal.max() - signal.min()
+    if signal.dtype.kind not in "fc":
+        rng += 1
+    return rng

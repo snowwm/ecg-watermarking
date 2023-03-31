@@ -11,20 +11,22 @@ class BaseCoder(AlgoBase):
         super().__init__(**kwargs)
         # TODO add transforms
         self.transform = coder_transform
+
+    def set_record(self, record):
+        super().set_record(record)
         self._total_orig = 0
         self._total_compressed = 0
+
+    def update_db(self, db):
+        super().update_db(db)
+        db.set(comp_saving=self.mean_comp_saving)
 
     @property
     def mean_comp_saving(self):
         return 1 - np.divide(self._total_compressed, self._total_orig)
 
-    def stats(self):
-        res = super().stats()
-        res.update(comp_saving=self.mean_comp_saving)
-        return res
-
-    def encode(self, seq):
-        res = self.do_encode(seq)
+    def encode(self, seq, **kwargs):
+        res = self.do_encode(seq, **kwargs)
 
         self._total_orig += len(seq)
         self._total_compressed += len(res)
@@ -34,10 +36,13 @@ class BaseCoder(AlgoBase):
 
         return res
 
+    def decode(self, bits, **kwargs):
+        return self.do_decode(bits, **kwargs)
+
     def do_encode(self, seq):
         raise NotImplementedError()
 
-    def decode(self, bits):
+    def do_decode(self, bits):
         raise NotImplementedError()
 
     def test(self):
@@ -63,5 +68,5 @@ class MockCoder(BaseCoder):
         pad = util.Random().bits(comp_len - 8)
         return np.concatenate((header, pad))
 
-    def decode(self, bits):
+    def do_decode(self, bits):
         return self.store[util.bits_to_int(bits[:8])]

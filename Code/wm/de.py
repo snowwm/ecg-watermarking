@@ -33,10 +33,6 @@ class DEEmbedder(WMBase):
     def max_restore_error(self):
         return self.de_n * 2
 
-    def check_range(self):
-        # Will check each element individually when embedding.
-        return True
-
     def get_coords(self, carr):
         c1 = np.arange(0, len(carr) - self.de_shift, self.de_shift + 1)
         if not self.contiguous:

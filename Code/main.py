@@ -90,12 +90,6 @@ def add_common_args(p):
     p.add_argument("-r", "--redundancy", type=int, dest="_redundancy")
     p.add_argument("-b", "--block-len", type=int, dest="_block_len")
 
-    # Coder params.
-    p.add_argument("--coder-transform", choices=["dct", "dwt"], dest="_coder_transform")
-    p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
-    p.add_argument("--huff-sym-size", type=int, dest="_huff_sym_size")
-    p.add_argument("--huff-dpcm", action="store_true", default=None, dest="_huff_dpcm")
-
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
     # Here we need to explicitly specify default=None, otherwise store_true sets it to False.
@@ -111,8 +105,10 @@ def add_common_args(p):
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
 
     # PEE params.
-    p.add_argument("--pee-neigbors", type=int, dest="_pee_neigbors")
-    p.add_argument("--pee-ref-channel", type=int, dest="_pee_ref_channel")
+    # Coder params.
+    p.add_argument("--coder-transform", choices=["dct", "dwt"], dest="_coder_transform")
+    p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
+    p.add_argument("--huff-sym-size", type=int, dest="_huff_bitness")
 
 
 def test(args, db):
@@ -175,7 +171,7 @@ def do_wm(args, db):
             try:
                 with db.new_ctx() as dbc:
                     rec = load_record_file(rec_in, dbc, args.channel)
-                    orig_carr = rec.signals.copy()
+                    orig_cont = rec.signals.copy()
                     orig_wm = [watermark] * rec.signal_count
 
                     rec.embed_watermark(worker)
@@ -183,7 +179,7 @@ def do_wm(args, db):
                     if args.noise_var:
                         rec.add_noise(args.noise_var)
 
-                    rec.extract_watermark(worker, orig_wm=orig_wm, orig_carr=orig_carr)
+                    rec.extract_watermark(worker, orig_wm=orig_wm, orig_carr=orig_cont)
             except errors.DynamicError as e:
                 print(f"Skipped ({repr(e)})")
 

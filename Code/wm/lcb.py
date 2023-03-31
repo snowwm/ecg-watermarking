@@ -1,6 +1,6 @@
 import numpy as np
 
-from coding.base import BaseCoder
+from coders.base import BaseCoder
 import errors
 import util
 
@@ -9,7 +9,7 @@ from .lsb import LSBEmbedder
 SIZE_BITNESS = 32
 
 
-class LCBEmbedder(LSBEmbedder):
+class LCBEmbedder(LSBEmbedder, BaseCoder):
     codename = "lcb"
     max_restore_error = 0
     test_matrix = {
@@ -47,5 +47,7 @@ class LCBEmbedder(LSBEmbedder):
         compressed = carr[SIZE_BITNESS:wm_start]
         wm = carr[wm_start : wm_start + wm_len]
 
-        restored = self.decode(compressed)
+        if restored.size != carr.size:
+            raise errors.CantExtract(suffix="decompressed container has wrong size")
+
         return wm, restored

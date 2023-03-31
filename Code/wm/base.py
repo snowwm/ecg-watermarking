@@ -8,13 +8,13 @@ import util
 class WMBase(AlgoBase):
     max_restore_error = None
 
-    # When this is None, each block will be represented as an array of bits.
+    # When this is None, each WM block will be represented as an array of bits.
     # Otherwise, that array will be packed and converted to this dtype.
     packed_block_type: np.dtype = None
 
     test_matrix = {
         "wm_cont_len": [
-            (83, 249),
+            (83, 249),  # test some odd length
             (4000, 12000),
         ],  # wm_len in bits, cont_len in samples
         "shuffle": [False, True],
@@ -41,10 +41,31 @@ class WMBase(AlgoBase):
         self.contiguous = contiguous
         self.redundancy = redundancy
         self.block_len = block_len
+
+        self.container = None
+        self.carrier = None
+        self.watermark = None
+        self.chan_num = None
         self.unpacked_wm_len = None
 
-    def set_container(self, cont, carr_range=None):
+    def set_container(self, cont):
         self.container = np.array(cont)
+
+    def set_carrier(self, carr):
+        self.carrier = np.array(carr)
+
+    def set_watermark(self, wm):
+        self.watermark = np.array(wm)
+
+    def set_chan_num(self, chan_num):
+        self.chan_num = chan_num
+
+    def check_range(self):
+        return True
+
+    # Main embedding/extraction methods.
+
+    def embed(self, *, carr_range=None):
         if carr_range is None:
             inf = np.iinfo(self.container.dtype)
             carr_range = (inf.min, inf.max)
@@ -53,18 +74,6 @@ class WMBase(AlgoBase):
         if not self.check_range():
             raise errors.InsufficientContainerRangeStatic()
 
-    def set_carrier(self, carr):
-        self.carrier = np.array(carr)
-
-    def set_watermark(self, wm):
-        self.watermark = np.array(wm)
-
-    def set_record(self, rec):
-        self.record = rec
-
-    # Main embedding/extraction methods.
-
-    def embed(self):
         self.carrier = self.container.copy()
         coords = self.get_coords(self.container)
         wm = self.preprocess_wm(self.watermark)
@@ -199,9 +208,6 @@ class WMBase(AlgoBase):
         return chunk
 
     # Abstract methods.
-
-    def check_range(self):
-        raise NotImplementedError()
 
     def get_coords(self, carr):
         raise NotImplementedError()

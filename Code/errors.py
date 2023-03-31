@@ -9,12 +9,11 @@ class WMError(Exception):
         super().__init__(msg)
 
 
+# Static errors
+
+
 class StaticError(WMError):
     """These errors are raised before actual embedding/extraction starts."""
-
-
-class DynamicError(WMError):
-    """These errors are raised in the course of embedding/extraction."""
 
 
 class InvalidConfig(StaticError):
@@ -23,6 +22,13 @@ class InvalidConfig(StaticError):
 
 class InsufficientContainerRangeStatic(StaticError):
     msg = "Insufficient container range"
+
+
+# Dynamic errors
+
+
+class DynamicError(WMError):
+    """These errors are raised in the course of embedding/extraction."""
 
 
 class CantEmbed(DynamicError):

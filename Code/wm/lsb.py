@@ -15,7 +15,7 @@ class LSBEmbedder(WMBase):
         self.lsb_lowest_bit = lsb_lowest_bit
 
     def check_range(self):
-        hi_bit = self.lsb_lowest_bit + self.block_len
+        hi_bit = self.lsb_lowest_bit + self.block_len - 1
         if np.iinfo(self.container.dtype).min == 0:
             # Unsigned carrier
             min = 0

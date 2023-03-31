@@ -23,7 +23,7 @@ class BaseRecord:
         print(f"Finished writing {path}")
 
     def use_channel(self, chan: int):
-        self.used_channels = range(self.signal_count) if chan == -1 else [chan]
+        self.used_channels = range(self.signal_count) if chan == -1 else [chan - 1]
 
     def load_data(self, path: Path):
         raise NotImplemented()
@@ -53,6 +53,7 @@ class BaseRecord:
         return {
             "label": self.signal_labels[chan],
             "unit": self.signal_units[chan],
+            "sample_count": len(self.signals[chan]),
             "sample_freq": self.signal_freqs[chan],
             "max_bps": self.signal_max_bps[chan],
             "min_bps": np.ceil(np.log2(dmax - dmin + 1)),
@@ -72,21 +73,19 @@ class BaseRecord:
         print(f"Watermark = {self.create_watermark()!r}")
 
         for c in self.used_channels:
-            i = self.signal_info(c)
+            h = self.signal_info(c)
             print()
-            print(f"Signal {h['label']!r}:")
+            print(f"Signal {c + 1}, {h['label']!r}:")
             print(
-                f"  Sample rate = {h['sample_frequency']}, sample count = {h['sample_count']}"
+                f"  Sample rate = {h['sample_freq']}, sample count = {len(self.signals[c])}"
             )
-            print(f"  Digital range: {h['digital_min']} - {h['digital_max']}")
+            print(f"  Digital range: {h['nom_dig_min']} - {h['nom_dig_max']}")
+            print(f"  Eff. digital range: {h['eff_dig_min']} - {h['eff_dig_max']}")
             print(
-                f"  Eff. digital range: {h['eff_digital_min']} - {h['eff_digital_max']}"
-            )
-            print(
-                f"  Physical range: {h['physical_min']} - {h['physical_max']} {h['dimension']}"
+                f"  Physical range: {h['nom_phys_min']} - {h['nom_phys_max']} {h['unit']}"
             )
             print(
-                f"  Eff. physical range: {h['eff_physical_min']} - {h['eff_physical_max']} {h['dimension']}"
+                f"  Eff. physical range: {h['eff_phys_min']} - {h['eff_phys_max']} {h['unit']}"
             )
 
     def dig_range(self, chan: int):
@@ -135,48 +134,75 @@ class BaseRecord:
         embedder.set_record(self)
 
         for c in self.used_channels:
-            print(f"Signal {c}, {self.signal_labels[c]!r}:")
-            rng = self.dig_range(c)
-            embedder.set_container(self.signals[c], rng)
-            self.signals[c] = embedder.embed()
-
             with self.db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                dbc.set(channel=c, **self.signal_info(c))
-                dbc.set_psnr(
-                    embedder.carrier,
-                    embedder.container,
-                    rng,
-                    prefix="embed",
-                    print=True,
-                )
-                dbc.set(**embedder.stats())
+                try:
+                    print(f"Signal {c + 1}, {self.signal_labels[c]!r}:")
+                    dbc.set(
+                        channel=c + 1,
+                        wm_len=len(embedder.watermark),
+                        **self.signal_info(c),
+                    )
 
-    def extract_watermark(self, extractor, *, orig_wm=None, orig_carr=None):
+                    embedder.set_chan_num(c)
+                    embedder.set_container(self.signals[c])
+                    self.signals[c] = embedder.embed(carr_range=self.dig_range(c))
+
+                    dbc.set_psnr(
+                        embedder.carrier,
+                        embedder.container,
+                        prefix="embed",
+                        print=True,
+                    )
+                finally:
+                    embedder.update_db(dbc)
+
+    def extract_watermark(self, extractor, *, orig_wm=None, orig_cont=None):
         print(f"\nExtracting watermark...")
         res = []
         extractor.set_record(self)
 
         for c in self.used_channels:
-            print(f"Signal {c}, {self.signal_labels[c]!r}:")
-            rng = self.dig_range(c)
-            extractor.set_carrier(self.signals[c])
-            extracted = extractor.extract()
-            self.signals[c] = extractor.restored
-            res.append(extracted)
-
             with self.db.new_ctx(aggregs=["mean", "worst"]) as dbc:
-                dbc.set(channel=c, **self.signal_info(c))
-
-                if orig_wm is not None:
-                    if np.array_equal(extracted, orig_wm[c]):
-                        print("  ✔️ Watermark matches")
-                    else:
-                        print("  ❌ Watermark doesn't match")
-                    dbc.set_ber(orig_wm[c], extracted, prefix="extract", print=True)
-
-                if orig_carr is not None:
-                    dbc.set_psnr(
-                        self.signals[c], orig_carr[c], rng, prefix="restore", print=True
+                try:
+                    print(f"Signal {c + 1}, {self.signal_labels[c]!r}:")
+                    dbc.set(
+                        channel=c + 1,
+                        wm_len=len(extractor.watermark),
+                        **self.signal_info(c),
                     )
+
+                    extractor.set_chan_num(c)
+                    if orig_cont is not None:
+                        extractor.set_container(orig_cont[c])
+                    extractor.set_carrier(self.signals[c])
+
+                    extracted = extractor.extract()
+                    res.append(extracted)
+                    self.signals[c] = extractor.restored
+
+                    if orig_wm is not None:
+                        if np.array_equal(extracted, orig_wm[c]):
+                            print("  ✔️  Watermark matches")
+                        else:
+                            print("  ❌  Watermark doesn't match")
+
+                        dbc.set_ber(orig_wm[c], extracted, prefix="extract", print=True)
+
+                    if orig_cont is not None:
+                        if extractor.max_restore_error is not None:
+                            if (
+                                abs(self.signals[c] - orig_cont[c]).max()
+                                <= extractor.max_restore_error
+                            ):
+                                print("  ✔️  Restored successfully")
+                            else:
+                                print("  ❌  Restoration failed")
+
+                        dbc.set_psnr(
+                            self.signals[c], orig_cont[c], prefix="restore", print=True
+                        )
+                finally:
+                    pass
+                    # FIXME extractor.update_db(dbc)
 
         return res

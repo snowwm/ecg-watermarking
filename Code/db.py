@@ -1,5 +1,5 @@
 import builtins
-from collections import ChainMap
+from collections import ChainMap, defaultdict
 import csv
 from numbers import Number
 from pathlib import Path
@@ -38,7 +38,7 @@ class DatabaseContext:
     ):
         self.parent = parent
         if data is None:
-            data = {}
+            data = {"error": ""}
         self.data = data
         self.records = []
         self.prefix = prefix
@@ -64,9 +64,13 @@ class DatabaseContext:
         self.start_time = time.perf_counter()
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, exc_type, exc_value, tb):
         elapsed = time.perf_counter() - self.start_time
         self.set(elapsed=elapsed)
+
+        if exc_value is not None:
+            self.set(error=repr(exc_value))
+
         self.save()
 
     def get(self, key, default=None):
@@ -82,7 +86,9 @@ class DatabaseContext:
             k = prefix + k
             self.data[k] = v
             if print:
-                builtins.print(f"  {k} = {v:.2}")
+                if isinstance(v, float):
+                    v = f"{v:.2f}"
+                builtins.print(f"  {k} = {v}")
 
     def set_psnr(self, s1, s2, rng=None, **kwargs):
         mse = np.square(s2 - s1).mean()
@@ -112,30 +118,37 @@ class DatabaseContext:
     def apply(self, fallback=None, **funcs):
         res = {}
         for k, v in self.records[0].items():
-            if k in KEY_FIELDS or not isinstance(v, Number):
+            if k in KEY_FIELDS or k in self.data or not isinstance(v, Number):
                 continue
 
+            eff_fallback = fallback
             for f_re, f in funcs.items():
                 if re.match(f_re, k):
-                    fallback = f
+                    eff_fallback = f
                     break
 
-            if fallback:
-                res[k] = fallback([x[k] for x in self.records if k in x])
+            if eff_fallback:
+                res[k] = eff_fallback([x[k] for x in self.records if k in x])
 
-        return res | self.data
+        return res
 
     def agg(self, func):
         if func == "worst":
-            res = self.apply(**{".*_mse": np.max, ".*_psnr": np.min, ".*_ber": np.max})
+            res = self.apply(
+                **{".*_mse": np.nanmax, ".*_psnr": np.nanmin, ".*_ber": np.nanmax}
+            )
         elif isinstance(func, str):
-            res = self.apply(getattr(np, func))
+            if func == "mean":
+                eff_func = np.nanmean
+            else:
+                eff_func = getattr(np, func)
+            res = self.apply(eff_func)
         else:
             res = self.apply(func)
             func = func.__name__
 
         res["agg"] = func
-        return res
+        return res | self.data
 
 
 class Database(DatabaseContext):
@@ -154,6 +167,7 @@ class Database(DatabaseContext):
             reader = csv.DictReader(f)
             self._stored_records = list(reader)
             self._fieldnames = reader.fieldnames
+            self._key_parts = [k for k in self._fieldnames if k in KEY_FIELDS]
 
     def dump(self):
         if self._filepath is None:
@@ -175,20 +189,22 @@ class Database(DatabaseContext):
             writer.writerows(self._stored_records)
 
     def save(self):
+        records_by_key = defaultdict(dict)
+
+        for r in self._stored_records:
+            records_by_key[self._key_for_record(r)] |= r
+
         for r in self.records:
             r = {k: str(v) for k, v in r.items()}
-            for orr in self._stored_records:
-                for f in self._fieldnames:
-                    if f in KEY_FIELDS and orr.get(f, "") != r.get(f, ""):
-                        break
-                else:
-                    orr |= r
-                    break
-            else:
-                # didn't find a match
-                self._stored_records.append(r)
+            records_by_key[self._key_for_record(r)] |= r
 
         self.records = []
+        self._stored_records = [
+            records_by_key[k] for k in sorted(records_by_key.keys())
+        ]
+
+    def _key_for_record(self, record):
+        return tuple(record.get(k, "") for k in self._key_parts)
 
     # def save(self):
     #     self.results = []
