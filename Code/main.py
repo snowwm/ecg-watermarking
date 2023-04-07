@@ -79,7 +79,7 @@ def add_common_args(p):
     p.add_argument(
         "-a",
         "--algo",
-        choices=("lsb", "lcb", "de", "pee-n", "pee-s", "itb"),
+        choices=("de", "itb", "lcb", "lcbp", "lsb", "pee"),
         default="lsb",
     )
 
@@ -105,6 +105,12 @@ def add_common_args(p):
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
 
     # PEE params.
+    p.add_argument("--predictor", choices=["neigh", "chan"], dest="_predictor")
+
+    # Predictor params.
+    p.add_argument("--left-neighbors", type=int, dest="_left_neighbors")
+    p.add_argument("--right-neighbors", type=int, dest="_right_neighbors")
+
     # Coder params.
     p.add_argument("--coder-transform", choices=["dct", "dwt"], dest="_coder_transform")
     p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")

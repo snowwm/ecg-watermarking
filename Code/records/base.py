@@ -105,29 +105,18 @@ class BaseRecord:
             self.signals[c] = util.add_noise(self.signals[c], var, dmin, dmax)
 
     def reconstruct_channels(self):
-        if self.signal_count < 6:
-            raise Exception("This record has not enough channels.")
+        if self.signal_count < 3:
+            raise Exception("Nothing to reconstruct")
 
-        i = self.signals[0]
-        ii = self.signals[1]
-        iii = self.signals[2]
-        avr = self.signals[3]
-        avl = self.signals[4]
-        avf = self.signals[5]
+        from predictors import ChannelsPredictor
 
-        iii_pred = ii - i
-        avr_pred = (-i - ii) // 2
-        avl_pred = (i - iii_pred) // 2
-        avf_pred = (ii + iii_pred) // 2
-
-        self.db.set_psnr(iii_pred, iii, prefix="III")
-        self.db.set_ber(iii_pred, iii, prefix="III")
-        self.db.set_psnr(avr_pred, avr, prefix="aVR")
-        self.db.set_ber(avr_pred, avr, prefix="aVR")
-        self.db.set_psnr(avl_pred, avl, prefix="aVL")
-        self.db.set_ber(avl_pred, avl, prefix="aVL")
-        self.db.set_psnr(avf_pred, avf, prefix="aVF")
-        self.db.set_ber(avf_pred, avf, prefix="aVF")
+        predictor = ChannelsPredictor()
+        predictor.set_record(self)
+        for i in range(2, self.signal_count):
+            with self.db.new_ctx(prefix=self.signal_labels[i]) as dbc:
+                predictor.set_chan_num(i)
+                predictor.predict_all()
+                predictor.update_db(dbc)
 
     def embed_watermark(self, embedder):
         print(f"\nEmbedding watermark...")

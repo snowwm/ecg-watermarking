@@ -1,6 +1,6 @@
 from .base import WMBase
 from .de import DEEmbedder
 from .itb import ITBEmbedder
-from .lcb import LCBEmbedder
+from .lcb import LCBEmbedder, LCBPredEmbedder
 from .lsb import LSBEmbedder
-from .pee import NeighorsPEE, SiblingChannelPEE
+from .pee import PEEEmbedder

@@ -41,3 +41,7 @@ class InsufficientContainerRangeDynamic(CantEmbed):
 
 class CantExtract(DynamicError):
     msg = "Could not find watermark with given length"
+
+
+class CantCompress(DynamicError):
+    msg = "Could not compress the bit sequence"
