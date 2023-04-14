@@ -23,7 +23,7 @@ class BasePredictor(AlgoBase):
 
     def predict_all(self, coords=None):
         if coords is None:
-            coords = np.ndindex(self.pred_seq)
+            coords = range(len(self.pred_seq))
 
         try:
             res = self.do_predict_all(coords)
@@ -45,7 +45,7 @@ class BasePredictor(AlgoBase):
         try:
             res = self.do_predict_one(i)
         except NotImplementedError:
-            res = self.do_predict_all()[i]
+            res = self.do_predict_all(range(len(self.pred_seq)))[i]
 
         if self.orig_pred_seq is not None:
             self.__predicted.append(res)
@@ -80,11 +80,7 @@ class MockPredictor(BasePredictor):
         self.__rng = self.rng()
 
     def do_predict_all(self):
-        res = self.pred_seq + self.__rng.normal(
-            0, self.pred_noise_var, self.pred_seq.shape
-        )
-        return util.round(res, ref=self.pred_seq)
+        return self.__rng.add_noise(self.pred_seq, self.pred_noise_var)
 
     def do_predict_one(self, i):
-        res = self.pred_seq[i] + self.__rng.normal(0, self.pred_noise_var)
-        return util.round(res, ref=self.pred_seq)
+        self.__rng.add_noise(self.pred_seq[i : i + 1], self.pred_noise_var)[0]

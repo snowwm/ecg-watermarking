@@ -30,7 +30,7 @@ class ITBEmbedder(WMBase):
     def embed_chunk(self, wm, coords):
         chunk_len = min(len(wm), len(coords) - 1)
         x = self.container[coords].astype(np.int64)
-        x = x * 2 - util.round(x.mean(), "floor", ref=x)
+        x = x * 2 - util.round_op(x, op=np.mean, mode=np.floor)
         x[1:] += wm[:chunk_len]
 
         if x.min() < self.carr_range[0] or x.max() > self.carr_range[1]:

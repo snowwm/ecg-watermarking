@@ -51,17 +51,18 @@ class Random(np.random.Generator):
         m = np.mean((vmin, vmax))
 
         for f, a in zip(freqs, amps):
-            r = self.triangular(vmin, m, vmax, size=int(np.round(size * f)))
+            r = self.triangular(vmin, m, vmax, size=round_op(size, f, op=np.multiply))
             s += a * signal.resample(r, size)
 
         return self.add_noise(
             s / sum(amps), noise_var, vmin=vmin, vmax=vmax, dtype=dtype
         )
 
-    def add_noise(self, signal, var: float, *, vmin=None, vmax=None, dtype=None):
-        noise = self.normal(0, var, len(signal))
-        ns = signal + noise
-        ns = ns.round().astype(dtype or signal.dtype)
+    def add_noise(
+        self, signal: np.ndarray, var: float, *, vmin=None, vmax=None, dtype=None
+    ):
+        noise = self.normal(0, var, signal.shape)
+        ns = round_op(signal, noise, op=np.add, dtype=dtype)
         if vmin is not None or vmax is not None:
             ns = np.clip(ns, vmin, vmax)
         return ns
@@ -145,18 +146,18 @@ def set_bit(arr, bit_num, val):
     arr[val == 1] |= bit
 
 
-def round(val, mode="round", *, ref=None, dtype=None):
-    if ref is not None:
+def round_op(*args, op=np.divide, mode=np.round, dtype=None):
+    if dtype is None:
+        ref = args[0]
         if isinstance(ref, np.ndarray):
             dtype = ref.dtype
         else:
             dtype = type(ref)
 
-    func = getattr(np, mode)
-    val = func(val)
-    if dtype is not None:
-        val = val.astype(dtype)
-    return val
+    if mode is None:
+        return op(*args, dtype=dtype)
+    else:
+        return mode(op(*args)).astype(dtype)
 
 
 def dtype_info(dtype):

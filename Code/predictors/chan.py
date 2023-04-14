@@ -1,5 +1,6 @@
+import numpy as np
+
 from errors import StaticError
-import util
 
 from .base import BasePredictor
 
@@ -26,4 +27,4 @@ class ChannelsPredictor(BasePredictor):
             case 5:
                 res = (2 * ii - i) / 2
 
-        return util.round(res, ref=i)[coords]
+        return np.round(res).astype(i.dtype)[coords]

@@ -7,10 +7,9 @@ import util
 
 
 class BaseCoder(AlgoBase):
-    def __init__(self, coder_transform=None, **kwargs):
+    def __init__(self, coder_iwt=False, **kwargs):
         super().__init__(**kwargs)
-        # TODO add transforms
-        self.transform = coder_transform
+        self.coder_iwt = coder_iwt
 
     def set_record(self, record):
         super().set_record(record)
@@ -19,7 +18,8 @@ class BaseCoder(AlgoBase):
 
     def update_db(self, db):
         super().update_db(db)
-        db.set(comp_saving=self.mean_comp_saving)
+        if self._total_orig != 0:
+            db.set(comp_saving=self.mean_comp_saving)
 
     @property
     def mean_comp_saving(self):

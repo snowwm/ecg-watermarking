@@ -12,7 +12,7 @@ class RLECoder(BaseCoder):
         super().__init__(**kwargs)
         self.bitness = rle_bitness
 
-    def encode(self, seq):
+    def do_encode(self, seq):
         bounds = np.nonzero(seq[1:] != seq[:-1])[0] + 1
         rl_seq = np.diff(bounds, prepend=0, append=seq.size)
 
@@ -39,7 +39,7 @@ class RLECoder(BaseCoder):
 
         return util.to_bits(rl_seq, bit_depth=self.bitness)
 
-    def decode(self, bits):
+    def do_decode(self, bits):
         rl_seq = util.bits_to_ndarray(bits, bit_depth=self.bitness)
         seq = np.empty(np.sum(rl_seq), dtype=np.uint8)
         pos = 0
