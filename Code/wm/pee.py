@@ -33,8 +33,9 @@ class PEEEmbedder(WMBase, BasePredictor):
     def embed_chunk(self, wm, coords):
         s = self.carrier
         self.init_predictor(s, self.container)
+        chunk_len = min(len(wm), len(coords))
 
-        for i in range(wm.size):
+        for i in range(chunk_len):
             j = coords[i]
             p = self.predict_one(j).astype(np.int64)
             e = (s[j] - p) << self.block_len
@@ -43,13 +44,14 @@ class PEEEmbedder(WMBase, BasePredictor):
             # print(s[j], p, wm[i], p + e + wm[i])
             s[j] = p + e + wm[i]
 
-        return wm.size
+        return chunk_len
 
     def extract_chunk(self, wm, coords):
         s = self.restored
         self.init_predictor(s, self.container)
+        chunk_len = min(len(wm), len(coords))
 
-        for i in range(wm.size)[::-1]:
+        for i in range(chunk_len)[::-1]:
             j = coords[i]
             p = self.predict_one(j)
             e = s[j] - p
@@ -58,4 +60,4 @@ class PEEEmbedder(WMBase, BasePredictor):
             # print(s[j], p, wm[i], p + e + wm[i])
             s[j] = e + p
 
-        return wm.size
+        return chunk_len

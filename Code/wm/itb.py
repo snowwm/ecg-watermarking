@@ -28,24 +28,26 @@ class ITBEmbedder(WMBase):
         return super().make_coords_chunk(coords, start, need + 1)
 
     def embed_chunk(self, wm, coords):
+        chunk_len = min(len(wm), len(coords) - 1)
         x = self.container[coords].astype(np.int64)
         x = x * 2 - util.round(x.mean(), "floor", ref=x)
-        x[1:] += wm
+        x[1:] += wm[:chunk_len]
 
         if x.min() < self.carr_range[0] or x.max() > self.carr_range[1]:
             raise errors.InsufficientContainerRangeDynamic()
 
         self.carrier[coords] = x
-        return wm.size
+        return chunk_len
 
     def extract_chunk(self, wm, coords):
+        chunk_len = min(len(wm), len(coords) - 1)
         s = self.carrier[coords]
         pb = s[0] & 1
-        wm[:] = (s[1:] - pb) & 1
+        wm[:chunk_len] = (s[1:] - pb) & 1
 
         r = self.restored[coords].astype(np.int64)
         n = len(r)
-        r[1:] -= wm
+        r[1:] -= wm[:chunk_len]
         r = (n * r + r.sum()) / (2 * n)
         self.restored[coords] = np.floor(r)
-        return wm.size
+        return chunk_len

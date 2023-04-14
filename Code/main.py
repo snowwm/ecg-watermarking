@@ -52,7 +52,6 @@ def make_parser():
     p.add_argument("rec_in", type=Path)
     p.add_argument("wm_out", type=Path)
     p.add_argument("rec_out", type=Path, nargs="?")
-    p.add_argument("-l", "--wm-len", type=int, required=True)
     add_common_args(p)
     p.set_defaults(func=do_wm, action="extract")
 
@@ -65,7 +64,6 @@ def make_parser():
     p = subp.add_parser("research")
     p.add_argument("rec_files", type=Path, nargs="+")
     p.add_argument("-w", "--wm-file", type=Path)
-    p.add_argument("-l", "--wm-len", type=int)
     p.add_argument("-n", "--noise-var", type=float)
     add_common_args(p)
     p.set_defaults(func=do_wm, action="research")
@@ -84,11 +82,13 @@ def add_common_args(p):
     )
 
     # Common embedder params.
+    p.add_argument("-l", "--wm-len", type=int, dest="wm_len")
     p.add_argument("-k", "--key", dest="_key")
     p.add_argument("-s", "--shuffle", action="store_true", dest="_shuffle")
     p.add_argument("-C", "--non-contiguous", action="store_false", dest="_contiguous")
     p.add_argument("-r", "--redundancy", type=int, dest="_redundancy")
     p.add_argument("-b", "--block-len", type=int, dest="_block_len")
+    p.add_argument("-p", "--partial", action="store_true", dest="_allow_partial")
 
     # DE params.
     p.add_argument("--de-shift", type=int, dest="_de_shift")
@@ -181,11 +181,13 @@ def do_wm(args, db):
                     orig_wm = [watermark] * rec.signal_count
 
                     rec.embed_watermark(worker)
+                    orig_wm = [worker.watermark] * rec.signal_count  # FIXME
+                    worker.wm_len = None
 
                     if args.noise_var:
                         rec.add_noise(args.noise_var)
 
-                    rec.extract_watermark(worker, orig_wm=orig_wm, orig_carr=orig_cont)
+                    rec.extract_watermark(worker, orig_wm=orig_wm, orig_cont=orig_cont)
             except errors.DynamicError as e:
                 print(f"Skipped ({repr(e)})")
 

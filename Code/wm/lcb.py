@@ -27,21 +27,21 @@ class LCBEmbedder(LSBEmbedder, BaseCoder):
         return super().new(mixins=mixins, **kwargs)
 
     def make_coords_chunk(self, coords, start, need):
-        if start >= len(coords):
-            return None
-        return coords[start:]
+        # We compress entire signal in one pass.
+        return super().make_coords_chunk(coords, start, len(coords) - start)
 
     def embed_plane(self, bit_num, wm, cont):
         bits = self.pre_encode(bit_num, cont)
         compressed = self.encode(bits)
         size = util.to_bits(compressed.size, bit_depth=SIZE_BITNESS)
-        total_size = size.size + compressed.size + wm.size
-        if total_size > cont.size:
+        can_embed = cont.size - size.size - compressed.size
+        if can_embed < wm.size and not self.allow_partial:
             raise errors.CantEmbed(
                 suffix=f"insufficient compression saving {self.mean_comp_saving}"
             )
-        pad = cont[total_size:]
-        return np.concatenate([size, compressed, wm, pad])
+        pad = cont[-(can_embed - wm.size) :]
+        wm = wm[:can_embed]
+        return np.concatenate([size, compressed, wm, pad]), len(wm)
 
     def pre_encode(self, bit_num, bits):
         return bits
@@ -94,4 +94,4 @@ class LCBPredEmbedder(LCBEmbedder, BasePredictor):
 
     def post_decode(self, bit_num, bits):
         pred = util.get_bit(self.__pred, bit_num)
-        return bits ^ pred
+        return bits[:len(pred)] ^ pred

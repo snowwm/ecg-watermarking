@@ -40,13 +40,14 @@ class LSBEmbedder(WMBase):
             j = self.lsb_lowest_bit + i
             bit = 1 << j
             cont = (self.container[coords] & bit) >> j
-            plane = self.embed_plane(j, wm[:, i], cont)
+            plane, wm_done = self.embed_plane(j, wm[:, i], cont)
             set_plane(self.carrier, plane, bit, coords)
 
-        return wm.size
+        return wm_done
 
     def embed_plane(self, bit_num, wm, cont):
-        return wm
+        chunk_len = min(len(wm), len(cont))
+        return wm[:chunk_len], chunk_len
 
     def extract_chunk(self, wm, coords):
         for i in range(wm.shape[1]):
@@ -54,12 +55,12 @@ class LSBEmbedder(WMBase):
             bit = 1 << j
             carr = (self.carrier[coords] & bit) >> j
             plane, restored = self.extract_plane(j, len(wm), carr)
-            wm[:, i] = plane
+            wm[: plane.size, i] = plane
 
             if restored is not None:
                 set_plane(self.restored, restored, bit, coords)
 
-        return wm.size
+        return plane.size
 
     def extract_plane(self, bit_num, wm_len, carr):
         return carr, None

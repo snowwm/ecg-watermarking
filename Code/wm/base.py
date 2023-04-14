@@ -28,6 +28,7 @@ class WMBase(AlgoBase):
     def __init__(
         self,
         *,
+        allow_partial=False,
         wm_len=None,
         shuffle=False,
         contiguous=True,
@@ -36,6 +37,7 @@ class WMBase(AlgoBase):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.allow_partial = allow_partial
         self.wm_len = wm_len
         self.shuffle = shuffle
         self.contiguous = contiguous
@@ -46,7 +48,7 @@ class WMBase(AlgoBase):
         self.carrier = None
         self.watermark = None
         self.chan_num = None
-        self.unpacked_wm_len = None
+        self.bps = None
 
     def set_container(self, cont):
         self.container = np.array(cont)
@@ -62,6 +64,16 @@ class WMBase(AlgoBase):
 
     def check_range(self):
         return True
+
+    def max_wm_len(self, coords):
+        return len(coords) * self.block_len // self.redundancy
+
+    def unpacked_wm_len(self):
+        return self.wm_len * self.redundancy
+
+    def update_db(self, db):
+        super().update_db(db)
+        db.set(bps=self.bps, wm_len=self.wm_len)
 
     # Main embedding/extraction methods.
 
@@ -82,18 +94,18 @@ class WMBase(AlgoBase):
         self.debug("Orig wm", self.watermark, "wm")
         self.debug("Prep wm", wm, "wm")
 
+        wm_need = wm.size
         wm_done = 0
-        wm_need = len(wm)
         coords_done = 0
-
-        if self.unpacked_wm_len > len(coords) * self.block_len:
-            raise errors.CantEmbed()
 
         while wm_need > 0:
             wm_chunk = self.make_wm_chunk(wm, wm_done, wm_need)
             coords_chunk = self.make_coords_chunk(coords, coords_done, len(wm_chunk))
-            if coords_chunk is None:
-                raise errors.CantEmbed()
+            if coords_chunk.size == 0:
+                if self.allow_partial:
+                    break
+                else:
+                    raise errors.CantEmbed()
 
             done = self.embed_chunk(wm_chunk, coords_chunk)
             coords_done += len(coords_chunk)
@@ -101,6 +113,9 @@ class WMBase(AlgoBase):
             wm_need -= done
 
         # self.debug("Fill carr", self.carrier, "carr")
+        self.wm_len = wm_done // self.redundancy
+        self.watermark = self.watermark[: self.wm_len]
+        self.bps = self.wm_len / len(self.container)
         return self.carrier
 
     def extract(self):
@@ -109,9 +124,9 @@ class WMBase(AlgoBase):
 
         if self.wm_len is None:
             # Allocate max possible length
-            wm = self.alloc_wm(len(coords) * self.block_len)
+            wm = self.alloc_wm(self.max_wm_len(coords))
         else:
-            wm = self.alloc_wm(self.wm_len * self.redundancy)
+            wm = self.alloc_wm(self.unpacked_wm_len())
 
         wm_done = 0
         wm_need = len(wm)
@@ -120,19 +135,19 @@ class WMBase(AlgoBase):
         while wm_need > 0:
             wm_chunk = self.make_wm_chunk(wm, wm_done, wm_need)
             coords_chunk = self.make_coords_chunk(coords, coords_done, len(wm_chunk))
-            if coords_chunk is None:
-                if self.wm_len is not None:
-                    raise errors.CantExtract()
-                else:
-                    # FIXME
+            if coords_chunk.size == 0:
+                if self.allow_partial:
                     break
+                else:
+                    raise errors.CantExtract()
 
             done = self.extract_chunk(wm_chunk, coords_chunk)
             coords_done += len(coords_chunk)
             wm_done += done
             wm_need -= done
 
-        self.extracted = self.postprocess_wm(wm)
+        self.wm_len = wm_done // self.redundancy
+        self.extracted = self.postprocess_wm(wm[:wm_done])
 
         self.debug("Raw wm", wm, "wm")
         self.debug("Post wm", self.extracted, "wm")
@@ -154,8 +169,6 @@ class WMBase(AlgoBase):
         if self.shuffle:
             self.rng().shuffle(wm)
 
-        self.unpacked_wm_len = len(wm)
-
         if self.packed_block_type is not None:
             wm = util.bits_to_ndarray(
                 wm, dtype=self.packed_block_type, bit_depth=self.block_len
@@ -165,7 +178,7 @@ class WMBase(AlgoBase):
 
     def postprocess_wm(self, wm):
         if self.packed_block_type is not None:
-            wm = util.to_bits(wm, bit_depth=self.block_len)[: self.unpacked_wm_len]
+            wm = util.to_bits(wm, bit_depth=self.block_len)[: self.unpacked_wm_len()]
 
         if self.shuffle:
             perm = self.rng().permutation(len(wm))
@@ -188,7 +201,7 @@ class WMBase(AlgoBase):
 
     def make_wm_chunk(self, wm, start, need):
         if self.packed_block_type is None:
-            # If bits_remaining is not a multiple of block_len,
+            # If `need` is not a multiple of `block_len`,
             # cut the remainder into a separate chunk.
             if need > self.block_len:
                 need -= need % self.block_len
@@ -200,12 +213,7 @@ class WMBase(AlgoBase):
             return wm[start:]
 
     def make_coords_chunk(self, coords, start, need):
-        end = start + need
-        if end > len(coords):
-            return None
-        chunk = coords[start:end]
-        self.debug("Coords chunk", chunk)
-        return chunk
+        return coords[start : start + need]
 
     # Abstract methods.
 
