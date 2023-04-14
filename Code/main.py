@@ -239,7 +239,7 @@ args = parser.parse_args()
 util.Random.default_seed = args.seed
 db = Database(args.data_file, dump_all=args.data_all)
 db.load()
-dbc = db.new_ctx(aggregs=["mean", "worst"])
+dbc = db.new_ctx(aggregs=["mean", "worst"], aggreg_psnr=True)
 
 with dbc:
     args.func(args, dbc)

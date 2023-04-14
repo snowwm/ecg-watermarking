@@ -11,7 +11,9 @@ import numpy as np
 
 import util
 
-KEY_FIELDS = [
+# FIXME make this configurable
+KEY_FIELDS = {
+    "agg",
     "filename",
     "filepath",
     "channel",
@@ -23,8 +25,13 @@ KEY_FIELDS = [
     "de_shift",
     "de_rand_shift",
     "noise_var",
-    "agg",
-]
+    "predictor",
+    "coder",
+    "huff_bitness",
+    "rle_bitness",
+    "left_neighbors",
+    "right_neighbors",
+}
 
 
 class DatabaseContext:
@@ -35,6 +42,7 @@ class DatabaseContext:
         *,
         prefix: str = "",
         aggregs: list[str | Callable] = [],
+        aggreg_psnr=False,
     ):
         self.parent = parent
         if data is None:
@@ -43,6 +51,7 @@ class DatabaseContext:
         self.records = []
         self.prefix = prefix
         self.aggregs = aggregs
+        self.aggreg_psnr = aggreg_psnr
 
     def new_ctx(self, **kwargs):
         return DatabaseContext(self, self.data.new_child(), **kwargs)
@@ -53,6 +62,8 @@ class DatabaseContext:
 
         if self.records:
             # This is a branch context.
+            if self.aggreg_psnr:
+                self.recompute_psnr()
             self.parent.records.extend(self.records)
             for agg in self.aggregs:
                 self.parent.records.append(self.agg(agg))
@@ -92,15 +103,18 @@ class DatabaseContext:
 
     def set_psnr(self, s1, s2, rng=None, **kwargs):
         mse = np.square(s2 - s1).mean()
+
+        if rng is None:
+            rng = util.signal_range(s2)
+        elif not isinstance(rng, Number):
+            rng = util.signal_range(rng)
+
         if mse == 0:
             psnr = np.inf
         else:
-            if rng is None:
-                rng = s2.max() - s2.min() + 1
-            elif not isinstance(rng, int):
-                rng = rng[1] - rng[0] + 1
             psnr = 10 * np.log10(rng**2 / mse)
-        self.set(mse=mse, psnr=psnr, **kwargs)
+
+        self.set(mse=mse, psnr=psnr, psnr_range=rng, **kwargs)
 
     def set_ber(self, s1, s2, **kwargs):
         if s1.min() < 0 or s1.max() > 1:
@@ -149,6 +163,16 @@ class DatabaseContext:
 
         res["agg"] = func
         return res | self.data
+
+    def recompute_psnr(self):
+        max_rng = self.apply(**{".*_psnr_range": np.nanmax})
+        for r in self.records:
+            for k, rng in max_rng.items():
+                k = k.removesuffix("_range")
+                if k in r:
+                    mse_k = k.removesuffix("_psnr") + "_mse"
+                    mse = r[mse_k]
+                    r[k] = 10 * np.log10(rng**2 / mse)
 
 
 class Database(DatabaseContext):
