@@ -1,3 +1,4 @@
 from .base import BasePredictor, MockPredictor
-from .chan import ChannelsPredictor
+from .depchan import DepChanPredictor
 from .neigh import NeighborsPredictor
+from .neighchan import NeighChanPredictor

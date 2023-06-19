@@ -110,7 +110,9 @@ def add_common_args(p):
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
 
     # PEE params.
-    p.add_argument("--predictor", choices=["neigh", "chan"], dest="_predictor")
+    p.add_argument(
+        "--predictor", choices=["neigh", "neighchan", "depchan"], dest="_predictor"
+    )
 
     # Predictor params.
     p.add_argument("--left-neighbors", type=int, dest="_left_neighbors")
