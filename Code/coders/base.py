@@ -7,10 +7,6 @@ import util
 
 
 class BaseCoder(AlgoBase):
-    def __init__(self, coder_iwt=False, **kwargs):
-        super().__init__(**kwargs)
-        self.coder_iwt = coder_iwt
-
     def set_record(self, record):
         super().set_record(record)
         self._total_orig = 0
@@ -27,13 +23,8 @@ class BaseCoder(AlgoBase):
 
     def encode(self, seq, **kwargs):
         res = self.do_encode(seq, **kwargs)
-
         self._total_orig += len(seq)
         self._total_compressed += len(res)
-
-        comp_saving = len(res) / len(seq)
-        self.debug(f"{type(self).__name__}: compression space saving {comp_saving:.2f}")
-
         return res
 
     def decode(self, bits, **kwargs):
@@ -69,4 +60,14 @@ class MockCoder(BaseCoder):
         return np.concatenate((header, pad))
 
     def do_decode(self, bits):
-        return self.store[util.bits_to_int(bits[:8])]
+        return self.store[util.bits_to_int(bits[:8], bit_depth=8)]
+
+
+class NullCoder(BaseCoder):
+    codename = "null"
+
+    def do_encode(self, seq):
+        return seq
+
+    def do_decode(self, bits):
+        return bits

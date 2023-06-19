@@ -27,11 +27,15 @@ KEY_FIELDS = {
     "noise_var",
     "predictor",
     "coder",
-    "huff_bitness",
+    "huff_sym_size",
     "rle_bitness",
+    "lcb_iwt_rounds",
+    "lcb_plane_span",
+    "lcb_planes",
     "lsb_lowest_bit",
     "left_neighbors",
     "right_neighbors",
+    "pre_trained",
 }
 
 

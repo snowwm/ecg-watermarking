@@ -101,7 +101,10 @@ def add_common_args(p):
     p.add_argument("--rcm-skip", action="store_true", default=None, dest="_rcm_skip")
 
     # LCB params.
-    p.add_argument("--coder", choices=["rle", "huff", "mock"], dest="_coder")
+    p.add_argument("--coder", choices=["rle", "huff", "mock", "null"], dest="_coder")
+    p.add_argument("--lcb-plane-span", type=int, dest="_lcb_plane_span")
+    p.add_argument("--lcb-planes", type=int, dest="_lcb_planes")
+    p.add_argument("--lcb-iwt-rounds", type=int, dest="_lcb_iwt_rounds")
 
     # LSB params.
     p.add_argument("--lsb-lowest-bit", type=int, dest="_lsb_lowest_bit")
@@ -112,11 +115,11 @@ def add_common_args(p):
     # Predictor params.
     p.add_argument("--left-neighbors", type=int, dest="_left_neighbors")
     p.add_argument("--right-neighbors", type=int, dest="_right_neighbors")
+    p.add_argument("--pre-trained", action="store_true", dest="_pre_trained", default=None)
 
     # Coder params.
-    p.add_argument("--coder-transform", choices=["dct", "dwt"], dest="_coder_transform")
     p.add_argument("--rle-bitness", type=int, dest="_rle_bitness")
-    p.add_argument("--huff-sym-size", type=int, dest="_huff_bitness")
+    p.add_argument("--huff-sym-size", type=int, dest="_huff_sym_size")
 
 
 def test(args, db):
@@ -171,9 +174,14 @@ def do_wm(args, db):
         else:
             parser.error("You must specify one of --wm-len and --wm-file")
 
-        worker.set_watermark(watermark)
-        worker.wm_len = len(watermark)
         db.set(noise_var=args.noise_var)
+
+        if args._pre_trained:
+            records = []
+            for rec_in in args.rec_files:
+                rec = load_record_file(rec_in, DatabaseContext())
+                records.append(rec.signals)
+            worker.fit_collection(records)
 
         for rec_in in args.rec_files:
             with db.new_ctx() as dbc:
