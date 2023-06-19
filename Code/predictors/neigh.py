@@ -7,11 +7,7 @@ from .base import BasePredictor
 class NeighborsPredictor(BasePredictor):
     codename = "neigh"
 
-    def __init__(self, left_neighbors=1, right_neighbors=0, **kwargs) -> None:
-        """
-        num_neigbors - number of neighbors *on each side* that will be used
-        for prediction.
-        """
+    def __init__(self, left_neighbors=1, right_neighbors=1, **kwargs) -> None:
         super().__init__(**kwargs)
         self.left_neighbors = left_neighbors
         self.right_neighbors = right_neighbors
@@ -19,10 +15,10 @@ class NeighborsPredictor(BasePredictor):
     def get_coords(self, carr):
         return np.arange(self.left_neighbors, len(carr) - self.right_neighbors)
 
-    def init_predictor(self, seq, orig_seq=None):
-        super().init_predictor(seq, orig_seq)
+    def init_predictor(self, **kwargs):
+        super().init_predictor(**kwargs)
         win_size = self.left_neighbors + self.right_neighbors + 1
-        self.__neighbors = sliding_window_view(seq, win_size)
+        self.__neighbors = sliding_window_view(self.pred_seq, win_size)
 
     def do_predict_one(self, i):
         win_sum = np.sum(self.__neighbors[i - self.left_neighbors])

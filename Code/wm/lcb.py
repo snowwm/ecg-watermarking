@@ -79,16 +79,12 @@ class LCBPredEmbedder(LCBEmbedder, BasePredictor):
         return super().new(mixins=mixins, **kwargs)
 
     def embed_chunk(self, wm, coords):
-        self.init_predictor(self.carrier, self.container)
+        self.init_predictor(pred_seq=self.carrier, pred_mode="embed")
         self.__pred = self.predict_all(coords)
         return super().embed_chunk(wm, coords)
 
-    def pre_encode(self, bit_num, bits):
-        pred = util.get_bit(self.__pred, bit_num)
-        return bits ^ pred
-
     def extract_chunk(self, wm, coords):
-        self.init_predictor(self.restored, self.container)
+        self.init_predictor(pred_seq=self.restored, pred_mode="extract")
         self.__pred = self.predict_all(coords)
         return super().extract_chunk(wm, coords)
 

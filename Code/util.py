@@ -51,7 +51,7 @@ class Random(np.random.Generator):
         m = np.mean((vmin, vmax))
 
         for f, a in zip(freqs, amps):
-            r = self.triangular(vmin, m, vmax, size=round_op(size, f, op=np.multiply))
+            r = self.triangular(vmin, m, vmax, size=int(size * f))
             s += a * signal.resample(r, size)
 
         return self.add_noise(
@@ -62,7 +62,7 @@ class Random(np.random.Generator):
         self, signal: np.ndarray, var: float, *, vmin=None, vmax=None, dtype=None
     ):
         noise = self.normal(0, var, signal.shape)
-        ns = round_op(signal, noise, op=np.add, dtype=dtype)
+        ns = round_op(signal, noise, op=np.add, dtype=dtype, vmin=vmin, vmax=vmax)
         if vmin is not None or vmax is not None:
             ns = np.clip(ns, vmin, vmax)
         return ns
@@ -82,13 +82,13 @@ def to_bits(data, *, bit_depth=None):
     elif isinstance(data, int):
         bl = max(bit_depth or 0, data.bit_length())
         bps = int(np.ceil(bl / 8)) * 8
-        data = data.to_bytes(bps // 8, sys.byteorder)
+        data = data.to_bytes(bps // 8, sys.byteorder, signed=True)
     elif isinstance(data, np.ndarray):
         if data.dtype != np.uint8:
             bps = data.dtype.itemsize * 8
             data = data.tobytes()
     elif not isinstance(data, bytes):
-        raise NotImplementedError("Expecting bytes, str or ndarray")
+        raise NotImplementedError("Expecting bytes, int, str or ndarray")
 
     if isinstance(data, bytes):
         data = np.frombuffer(data, dtype=np.uint8)
@@ -103,7 +103,10 @@ def to_bits(data, *, bit_depth=None):
 
 
 def bits_to_ndarray(bits, shape=None, *, dtype=np.uint8, bit_depth=None):
-    bps = dtype().itemsize * 8
+    if not isinstance(dtype, np.dtype):
+        dtype = dtype()
+    bps = dtype.itemsize * 8
+
     if bit_depth is not None and bit_depth != bps:
         assert bit_depth < bps
         pad_width = bit_depth - (len(bits) % bit_depth)
@@ -115,7 +118,7 @@ def bits_to_ndarray(bits, shape=None, *, dtype=np.uint8, bit_depth=None):
         pad = np.zeros(pad_shape, dtype=np.uint8)
         bits = np.hstack((bits, pad)).ravel()
 
-    res = np.packbits(bits, bitorder=sys.byteorder)
+    res = np.packbits(bits, bitorder=sys.byteorder).view(dtype)
     if shape is not None:
         res = res.reshape(shape)
     return res
@@ -130,23 +133,27 @@ def bits_to_str(bits, **kwargs):
 
 
 def bits_to_int(bits, **kwargs):
-    return int.from_bytes(bits_to_bytes(bits, **kwargs), sys.byteorder)
+    return int.from_bytes(bits_to_bytes(bits, dtype=np.int64, **kwargs), sys.byteorder, signed=True)
 
 
 # Other utilities.
 
 
 def get_bit(arr, bit_num):
-    return (arr & (1 << bit_num)) >> bit_num
+    return (arr >> bit_num) & 1
 
 
-def set_bit(arr, bit_num, val):
-    bit = 1 << bit_num
-    arr[val == 0] &= ~bit
-    arr[val == 1] |= bit
+def set_bit(arr, bit_num, val, *, mask=1):
+    arr &= np.array(~(mask << bit_num)).astype(arr.dtype)
+    arr += np.array(val << bit_num).astype(arr.dtype)
+    return arr
 
 
-def round_op(*args, op=np.divide, mode=np.round, dtype=None):
+def unsigned_view(arr):
+    return arr.view(np.dtype(f"u{arr.dtype.itemsize}"))
+
+
+def round_op(*args, op=np.divide, mode=np.round, dtype=None, clip=True, vmin=None, vmax=None):
     if dtype is None:
         ref = args[0]
         if isinstance(ref, np.ndarray):
@@ -154,10 +161,19 @@ def round_op(*args, op=np.divide, mode=np.round, dtype=None):
         else:
             dtype = type(ref)
 
-    if mode is None:
-        return op(*args, dtype=dtype)
-    else:
-        return mode(op(*args)).astype(dtype)
+    # if mode is None:
+    #     return op(*args, dtype=dtype)
+
+    res = mode(op(*args))
+
+    if clip:
+        if vmin is None:
+            vmin = dtype_info(dtype).min
+        if vmax is None:
+            vmax = dtype_info(dtype).max
+        res = np.clip(res, vmin, vmax)
+
+    return res.astype(dtype)
 
 
 def dtype_info(dtype):

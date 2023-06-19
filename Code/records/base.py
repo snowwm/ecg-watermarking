@@ -15,15 +15,21 @@ class BaseRecord:
     def load(self, path: Path):
         self.load_data(path)
         self.signal_count = len(self.signals)
-        self.use_channel(-1)
+        self.use_channel("")
         print(f"Finished reading {path}")
 
     def save(self, path: Path):
         self.save_data(path)
         print(f"Finished writing {path}")
 
-    def use_channel(self, chan: int):
-        self.used_channels = range(self.signal_count) if chan == -1 else [chan - 1]
+    def use_channel(self, chan_spec: str | int):
+        if isinstance(chan_spec, int) and chan_spec != 0:
+            self.used_channels = [chan_spec - 1]
+        elif chan_spec:
+            nums = chan_spec.split(",")
+            self.used_channels = [int(i) - 1 for i in nums]
+        else:
+            self.used_channels = range(self.signal_count)
 
     def load_data(self, path: Path):
         raise NotImplemented()
@@ -45,10 +51,11 @@ class BaseRecord:
         }
 
     def signal_info(self, chan: int):
-        dmin, dmax = self.dig_range(chan)
-        pmin, pmax = self.phys_range(chan)
         ds = self.signals[chan]
         ps = self.phys_signal(chan)
+        dmin, dmax = self.dig_range(chan)
+        edmin, edmax = ds.min(), ds.max()
+        pmin, pmax = self.phys_range(chan)
 
         return {
             "label": self.signal_labels[chan],
@@ -56,11 +63,12 @@ class BaseRecord:
             "sample_count": len(self.signals[chan]),
             "sample_freq": self.signal_freqs[chan],
             "max_bps": self.signal_max_bps[chan],
-            "min_bps": np.ceil(np.log2(dmax - dmin + 1)),
+            "min_bps": int(np.ceil(np.log2(dmax - dmin + 1))),
+            "eff_bps": int(np.ceil(np.log2(edmax - edmin + 1))),
             "nom_dig_min": dmin,
-            "eff_dig_min": ds.min(),
+            "eff_dig_min": edmin,
             "nom_dig_max": dmax,
-            "eff_dig_max": ds.max(),
+            "eff_dig_max": edmax,
             "nom_phys_min": pmin,
             "eff_phys_min": ps.min(),
             "nom_phys_max": pmax,
@@ -87,6 +95,11 @@ class BaseRecord:
             print(
                 f"  Eff. physical range: {h['eff_phys_min']} - {h['eff_phys_max']} {h['unit']}"
             )
+            print(
+                f"  Max BPS = {h['max_bps']}, min BPS = {h['min_bps']}, eff. BPS = {h['eff_bps']}"
+            )
+
+        print()
 
     def dig_range(self, chan: int):
         raise NotImplemented()
@@ -170,12 +183,12 @@ class BaseRecord:
                     self.signals[c] = extractor.restored
 
                     if orig_wm is not None:
-                        if np.array_equal(extracted, orig_wm[c]):
+                        if np.array_equal(extracted, orig_wm):
                             print("  ✔️  Watermark matches")
                         else:
                             print("  ❌  Watermark doesn't match")
 
-                        dbc.set_ber(orig_wm[c], extracted, prefix="extract", print=True)
+                        dbc.set_ber(orig_wm, extracted, prefix="extract", print=True)
 
                     if orig_cont is not None:
                         if extractor.max_restore_error is not None:

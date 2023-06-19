@@ -1,28 +1,29 @@
 import numpy as np
 
 from .base import WMBase
+import util
 
 
 class LSBEmbedder(WMBase):
     codename = "lsb"
     test_matrix = {
-        "lsb_lowest_bit": [0, 3, 6],
+        "lsb_lowest_bit": [1, 4, 7],
         "block_len": [1, 2],
     }
 
-    def __init__(self, lsb_lowest_bit=0, **kwargs):
+    def __init__(self, lsb_lowest_bit=1, **kwargs):
         super().__init__(**kwargs)
         self.lsb_lowest_bit = lsb_lowest_bit
 
     def check_range(self):
-        hi_bit = self.lsb_lowest_bit + self.block_len - 1
+        hi_bit = self.lsb_lowest_bit + self.max_block_len()
         if np.iinfo(self.container.dtype).min == 0:
             # Unsigned carrier
             min = 0
-            max = 2**hi_bit - 1
+            max = 2**hi_bit
         else:
-            min = 2 ** (hi_bit - 1) * -1
-            max = 2 ** (hi_bit - 1) - 1
+            min = 2 ** hi_bit * -1
+            max = 2 ** hi_bit - 1
 
         return min >= self.carr_range[0] and max <= self.carr_range[1]
 
@@ -35,13 +36,13 @@ class LSBEmbedder(WMBase):
     def embed_chunk(self, wm, coords):
         # We iterate on block_len, i.e. the number of bits per block
         # which should be small enough.
+        cont_chunk = self.get_cont_chunk(coords)
 
         for i in range(wm.shape[1]):
-            j = self.lsb_lowest_bit + i
-            bit = 1 << j
-            cont = (self.container[coords] & bit) >> j
+            j = self.lsb_lowest_bit - 1 + i
+            cont = util.get_bit(cont_chunk, j)
             plane, wm_done = self.embed_plane(j, wm[:, i], cont)
-            set_plane(self.carrier, plane, bit, coords)
+            self.carrier[coords] = util.set_bit(self.carrier[coords], j, plane)
 
         return wm_done
 
@@ -50,16 +51,18 @@ class LSBEmbedder(WMBase):
         return wm[:chunk_len], chunk_len
 
     def extract_chunk(self, wm, coords):
+        rest_chunk = self.restored[coords].copy()
+
         for i in range(wm.shape[1]):
-            j = self.lsb_lowest_bit + i
-            bit = 1 << j
-            carr = (self.carrier[coords] & bit) >> j
+            j = self.lsb_lowest_bit - 1 + i
+            carr = util.get_bit(self.carrier[coords], j)
             plane, restored = self.extract_plane(j, len(wm), carr)
             wm[: plane.size, i] = plane
 
             if restored is not None:
-                set_plane(self.restored, restored, bit, coords)
+                util.set_bit(rest_chunk, j, restored)
 
+        self.set_cont_chunk(coords, rest_chunk)
         return plane.size
 
     def extract_plane(self, bit_num, wm_len, carr):
@@ -69,10 +72,3 @@ class LSBEmbedder(WMBase):
         if type_ == "carr":
             type_ = "bin"
         return super().format_array(arr, type_)
-
-
-def set_plane(arr, content, bit, coords):
-    coords_0 = coords[content == 0]
-    arr[coords_0] &= ~bit
-    coords_1 = coords[content == 1]
-    arr[coords_1] |= bit

@@ -22,13 +22,14 @@ KEY_FIELDS = {
     "contiguous",
     "redundancy",
     "block_len",
-    "de_shift",
-    "de_rand_shift",
+    "rcm_shift",
+    "rcm_rand_shift",
     "noise_var",
     "predictor",
     "coder",
     "huff_bitness",
     "rle_bitness",
+    "lsb_lowest_bit",
     "left_neighbors",
     "right_neighbors",
 }
@@ -95,7 +96,11 @@ class DatabaseContext:
 
         for k, v in props.items():
             k = prefix + k
-            self.data[k] = v
+            if v is None:
+                self.data.pop(k, None)
+            else:
+                self.data[k] = v
+
             if print:
                 if isinstance(v, float):
                     v = f"{v:.2f}"
@@ -131,8 +136,10 @@ class DatabaseContext:
 
     def apply(self, fallback=None, **funcs):
         res = {}
-        for k, v in self.records[0].items():
-            if k in KEY_FIELDS or k in self.data or not isinstance(v, Number):
+        all_keys = set(sum((list(r.keys()) for r in self.records), []))
+
+        for k in all_keys:
+            if k in KEY_FIELDS or k in self.data:
                 continue
 
             eff_fallback = fallback
@@ -142,14 +149,17 @@ class DatabaseContext:
                     break
 
             if eff_fallback:
-                res[k] = eff_fallback([x[k] for x in self.records if k in x])
+                try:
+                    res[k] = eff_fallback([x[k] for x in self.records if k in x])
+                except:
+                    pass
 
         return res
 
     def agg(self, func):
         if func == "worst":
             res = self.apply(
-                **{".*_mse": np.nanmax, ".*_psnr": np.nanmin, ".*_ber": np.nanmax}
+                **{".*_mse": np.nanmax, ".*_psnr": np.nanmin, ".*_ber": np.nanmax, "comp_saving": np.nanmin}
             )
         elif isinstance(func, str):
             if func == "mean":
@@ -228,7 +238,7 @@ class Database(DatabaseContext):
         ]
 
     def _key_for_record(self, record):
-        return tuple(record.get(k, "") for k in self._key_parts)
+        return tuple(record.get(k) or "" for k in self._key_parts)
 
     # def save(self):
     #     self.results = []

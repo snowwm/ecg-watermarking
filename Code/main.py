@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 from algo_base import AlgoBase
-from db import Database
+from db import Database, DatabaseContext
 import errors
 from records import load_record_file
 import util
@@ -22,6 +22,7 @@ def make_parser():
     p = subp.add_parser("test", help="Run tests")
     p.add_argument("-a", "--algo")
     p.add_argument("-s", "--only-skipped", action="store_true")
+    p.add_argument("-f", "--force", action="store_true")
     p.set_defaults(func=test)
 
     p = subp.add_parser("rand-bytes", help="Generate random bytes")
@@ -31,7 +32,7 @@ def make_parser():
 
     p = subp.add_parser("info", help="Print some info about EDF(+) file(s)")
     p.add_argument("rec_files", type=Path, nargs="+")
-    p.add_argument("-c", "--channel", type=int, default=-1)
+    p.add_argument("-c", "--channel")
     p.add_argument("-r", "--reconstruct", action="store_true")
     p.set_defaults(func=file_info)
 
@@ -39,6 +40,7 @@ def make_parser():
     p.add_argument("var", type=float)
     p.add_argument("rec_in", type=Path)
     p.add_argument("rec_out", type=Path, nargs="?")
+    p.add_argument("-c", "--channel")
     p.set_defaults(func=add_noise)
 
     p = subp.add_parser("embed")
@@ -73,11 +75,11 @@ def make_parser():
 
 def add_common_args(p):
     # Common WM params.
-    p.add_argument("-c", "--channel", type=int, default=-1)
+    p.add_argument("-c", "--channel")
     p.add_argument(
         "-a",
         "--algo",
-        choices=("de", "itb", "lcb", "lcbp", "lsb", "pee"),
+        choices=("rcm", "itb", "lcb", "lcbp", "lsb", "pee"),
         default="lsb",
     )
 
@@ -91,12 +93,12 @@ def add_common_args(p):
     p.add_argument("-p", "--partial", action="store_true", dest="_allow_partial")
 
     # DE params.
-    p.add_argument("--de-shift", type=int, dest="_de_shift")
+    p.add_argument("--rcm-shift", type=int, dest="_rcm_shift")
     # Here we need to explicitly specify default=None, otherwise store_true sets it to False.
     p.add_argument(
-        "--de-rand-shift", action="store_true", default=None, dest="_de_rand_shift"
+        "--rcm-rand-shift", action="store_true", default=None, dest="_rcm_rand_shift"
     )
-    p.add_argument("--de-skip", action="store_true", default=None, dest="_de_skip")
+    p.add_argument("--rcm-skip", action="store_true", default=None, dest="_rcm_skip")
 
     # LCB params.
     p.add_argument("--coder", choices=["rle", "huff", "mock"], dest="_coder")
@@ -126,7 +128,7 @@ def test(args, db):
         algos = [wm.WMBase.find_subclass(algo) for algo in args.algo.split(",")]
 
     for algo in algos:
-        test_wm.test_algo(algo, verbose=args._verbose, only_skipped=args.only_skipped)
+        test_wm.test_algo(algo, verbose=args._verbose, only_skipped=args.only_skipped, force=args.force)
 
 
 def file_info(args, db):
@@ -174,22 +176,33 @@ def do_wm(args, db):
         db.set(noise_var=args.noise_var)
 
         for rec_in in args.rec_files:
-            try:
-                with db.new_ctx() as dbc:
-                    rec = load_record_file(rec_in, dbc, args.channel)
-                    orig_cont = rec.signals.copy()
-                    orig_wm = [watermark] * rec.signal_count
+            with db.new_ctx() as dbc:
+                rec = load_record_file(rec_in, dbc, args.channel)
+                orig_cont = rec.signals.copy()
+                orig_wm = watermark
 
-                    rec.embed_watermark(worker)
-                    orig_wm = [worker.watermark] * rec.signal_count  # FIXME
-                    worker.wm_len = None
+                for c in rec.used_channels:
+                    try:
+                        rec.use_channel(c + 1)
+                        rec.signals = orig_cont
 
-                    if args.noise_var:
-                        rec.add_noise(args.noise_var)
+                        worker.set_watermark(watermark)
+                        worker.wm_len = len(watermark)
+                        if args._allow_partial:  # FIXME
+                            worker.wm_len = None
 
-                    rec.extract_watermark(worker, orig_wm=orig_wm, orig_cont=orig_cont)
-            except errors.DynamicError as e:
-                print(f"Skipped ({repr(e)})")
+                        rec.embed_watermark(worker)
+
+                        if args._allow_partial:  # FIXME
+                            orig_wm = worker.watermark
+                            worker.wm_len = None
+
+                        if args.noise_var:
+                            rec.add_noise(args.noise_var)
+
+                        rec.extract_watermark(worker, orig_wm=orig_wm, orig_cont=orig_cont)
+                    except errors.DynamicError as e:
+                        print(f"Skipped ({repr(e)})")
 
             print()
             print()
@@ -229,7 +242,7 @@ def do_wm(args, db):
             args.wm_out.write_bytes(wms[0])
             rec.save(args.rec_out)
         elif args.action == "check":
-            orig_wm = [watermark] * rec.signal_count
+            orig_wm = watermark
             worker.wm_len = len(watermark)
             with db.new_ctx(aggregs=["mean", "worst"]) as dbc:
                 rec.extract_watermark(worker, dbc, orig_wm=orig_wm)
@@ -244,6 +257,7 @@ db.load()
 dbc = db.new_ctx(aggregs=["mean", "worst"], aggreg_psnr=True)
 
 with dbc:
+    dbc.set(error="")
     args.func(args, dbc)
 
 print(f"All done! Elapsed time: {dbc.get('elapsed'):.2f} s")

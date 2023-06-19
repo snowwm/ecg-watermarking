@@ -1,23 +1,18 @@
 import numpy as np
 
 from algo_base import AlgoBase
-import util
 
 
 class BasePredictor(AlgoBase):
-    def update_db(self, db):
-        super().update_db(db)
-        if self.orig_pred_seq is not None:
-            db.set_psnr(
-                np.array(self.__predicted),
-                np.array(self.__actual),
-                prefix="predict",
-                print=True,
-            )
+    def init_predictor(self, pred_mode, pred_seq, orig_seq=None):
+        # if pred_seq is _notset:
+        #     pred_seq = self.record.signals[self.chan_num]
+        if orig_seq is None:
+            orig_seq = pred_seq if pred_mode == "embed" else None
 
-    def init_predictor(self, seq, orig_seq=None):
-        self.pred_seq = seq
-        self.orig_pred_seq = orig_seq
+        self.pred_seq = pred_seq
+        self.pred_mode = pred_mode
+        self.__orig_seq = orig_seq
         self.__predicted = []
         self.__actual = []
 
@@ -28,16 +23,17 @@ class BasePredictor(AlgoBase):
         try:
             res = self.do_predict_all(coords)
         except NotImplementedError:
-            self.init_predictor(self.pred_seq.copy(), self.orig_pred_seq)
-            res = []
+            self.pred_seq = self.pred_seq.copy()
+            # res = []
             for i in coords:
-                val = self.pred_seq[i] = self.do_predict_one(i)
-                res.append(val)
-            res = np.array(res, dtype=self.pred_seq.dtype)
+                self.pred_seq[i] = self.do_predict_one(i)
+                # res.append(val)
+            # res = np.array(res, dtype=self.pred_seq.dtype)
+            res = self.pred_seq[coords]
 
-        if self.orig_pred_seq is not None:
-            self.__predicted = res
-            self.__actual = self.orig_pred_seq[coords]
+        if self.__orig_seq is not None:
+            self.__predicted.extend(res)
+            self.__actual.extend(self.__orig_seq[coords])
 
         return res
 
@@ -45,11 +41,11 @@ class BasePredictor(AlgoBase):
         try:
             res = self.do_predict_one(i)
         except NotImplementedError:
-            res = self.do_predict_all(range(len(self.pred_seq)))[i]
+            res = self.do_predict_all([i])[0]
 
-        if self.orig_pred_seq is not None:
+        if self.__orig_seq is not None:
             self.__predicted.append(res)
-            self.__actual.append(self.orig_pred_seq[i])
+            self.__actual.append(self.__orig_seq[i])
 
         return res
 
@@ -59,13 +55,15 @@ class BasePredictor(AlgoBase):
     def do_predict_one(self, i):
         raise NotImplementedError()
 
-    # @classmethod
-    # def supports_predict_all(cls):
-    #     return cls.do_predict_all is not BasePredictor.do_predict_all
-
-    # @classmethod
-    # def supports_predict_one(cls):
-    #     return cls.do_predict_one is not BasePredictor.do_predict_one
+    def update_db(self, db):
+        super().update_db(db)
+        if self.__predicted:
+            db.set_psnr(
+                np.array(self.__predicted),
+                np.array(self.__actual),
+                prefix="predict",
+                print=True,
+            )
 
 
 class MockPredictor(BasePredictor):
@@ -75,12 +73,19 @@ class MockPredictor(BasePredictor):
         super().__init__(**kwargs)
         self.pred_noise_var = pred_noise_var
 
-    def init_predictor(self, seq, orig_seq=None):
-        super().init_predictor(seq, orig_seq)
+    def init_predictor(self, pred_mode, **kwargs):
+        super().init_predictor(pred_mode=pred_mode, **kwargs)
+        if pred_mode == "embed":
+            self.__saved_pred_seq = self.pred_seq.copy()
+        elif pred_mode =="extract":
+            self.pred_seq = self.__saved_pred_seq
         self.__rng = self.rng()
 
-    def do_predict_all(self):
-        return self.__rng.add_noise(self.pred_seq, self.pred_noise_var)
+    def do_predict_all(self, coords):
+        res = self.__rng.add_noise(self.pred_seq[coords], self.pred_noise_var)
+        print(self.pred_seq[:50])
+        print(res[:50])
+        return res
 
     def do_predict_one(self, i):
-        self.__rng.add_noise(self.pred_seq[i : i + 1], self.pred_noise_var)[0]
+        return self.__rng.add_noise(self.pred_seq[i : i + 1], self.pred_noise_var)[0]

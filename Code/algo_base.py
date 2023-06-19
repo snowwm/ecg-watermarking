@@ -22,7 +22,8 @@ class AlgoBase:
     def get_subclasses(cls):
         for sub in cls.__subclasses__():
             yield from sub.get_subclasses()
-            yield sub
+            if sub.codename is not None:
+                yield sub
 
     @classmethod
     def find_subclass(cls, *codenames):
@@ -35,7 +36,11 @@ class AlgoBase:
         bases = *mixins, cls
         codenames = [x.codename for x in bases]
         type_name = "_".join([*codenames, "algo"])
+
         new_type = type(type_name, bases, {})
+        # Prevent this transient type from being chosen by find_subclass().
+        new_type.codename = None
+
         return new_type(**kwargs)
 
     # General instance methods.
@@ -54,7 +59,7 @@ class AlgoBase:
 
         self.key = key
         self.verbose = verbose
-        self.record = None
+        self.set_record(None)
 
     def rng(self):
         return util.Random(self.key)
@@ -62,13 +67,16 @@ class AlgoBase:
     def set_record(self, record):
         self.record = record
 
+    def set_chan_num(self, chan_num):
+        self.chan_num = chan_num
+
     def update_db(self, db):
         pass
 
     # Debugging.
 
-    def debug(self, prefix, arr=None, type_=None):
-        if not self.verbose:
+    def debug(self, prefix, arr=None, type_=None, *, force=False):
+        if not (self.verbose or force):
             return
         print(prefix, end="")
 

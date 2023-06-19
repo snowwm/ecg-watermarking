@@ -3,7 +3,8 @@ from pathlib import Path
 from db import DatabaseContext
 
 
-def load_record_file(path: Path, db: DatabaseContext, chan: int = None):
+def load_record_file(path: Path, db: DatabaseContext, chan: str = None):
+    path = Path(path)
     if path.suffix == ".edf":
         from .edf import EDFFile
 

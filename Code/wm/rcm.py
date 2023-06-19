@@ -50,8 +50,8 @@ class RCMEmbedder(WMBase):
         c1 = coords[:, 0]
         c2 = coords[:, 1]
         # Prevent overflow by using a "big" type.
-        x1 = self.container[c1].astype(np.int64)
-        x2 = self.container[c2].astype(np.int64)
+        x1 = self.get_cont_chunk(c1).astype(np.int64)
+        x2 = self.get_cont_chunk(c2).astype(np.int64)
         n = self.rcm_n
         y1 = (n + 1) * x1 - n * x2
         y2 = (n + 1) * x2 - n * x1
@@ -115,6 +115,6 @@ class RCMEmbedder(WMBase):
         x1 = np.round(self.rcm_k1 * y1 + self.rcm_k2 * y2)
         x2 = np.round(self.rcm_k2 * y1 + self.rcm_k1 * y2)
 
-        self.restored[c1[filled]] = x1
-        self.restored[c2[filled]] = x2
+        self.set_cont_chunk(c1[filled], x1)
+        self.set_cont_chunk(c2[filled], x2)
         return w.size

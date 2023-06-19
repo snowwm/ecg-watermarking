@@ -18,7 +18,7 @@ class PEEEmbedder(WMBase, BasePredictor):
     }
 
     @classmethod
-    def new(cls, predictor="neigh", mixins=[], **kwargs):
+    def new(cls, predictor, mixins=[], **kwargs):
         mixins = *mixins, BasePredictor.find_subclass(predictor)
         return super().new(mixins=mixins, **kwargs)
 
@@ -32,7 +32,7 @@ class PEEEmbedder(WMBase, BasePredictor):
 
     def embed_chunk(self, wm, coords):
         s = self.carrier
-        self.init_predictor(s, self.container)
+        self.init_predictor(pred_seq=s, pred_mode="embed")
         chunk_len = min(len(wm), len(coords))
 
         for i in range(chunk_len):
@@ -41,14 +41,13 @@ class PEEEmbedder(WMBase, BasePredictor):
             e = (s[j] - p) << self.block_len
             if not (self.carr_range[0] <= p + e <= self.carr_range[1]):
                 raise errors.InsufficientContainerRangeDynamic()
-            # print(s[j], p, wm[i], p + e + wm[i])
             s[j] = p + e + wm[i]
 
         return chunk_len
 
     def extract_chunk(self, wm, coords):
         s = self.restored
-        self.init_predictor(s, self.container)
+        self.init_predictor(pred_seq=s, pred_mode="extract")
         chunk_len = min(len(wm), len(coords))
 
         for i in range(chunk_len)[::-1]:
@@ -60,4 +59,5 @@ class PEEEmbedder(WMBase, BasePredictor):
             # print(s[j], p, wm[i], p + e + wm[i])
             s[j] = e + p
 
+        self.set_cont_chunk(coords, self.restored[coords])
         return chunk_len
