@@ -1,0 +1,15 @@
+[project]
+name = "tswm"
+description = "Medical timeseries watermarking research project"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "bitarray",
+    "matplotlib",
+    "numpy",
+    "progress", # for huffman lib
+    "pyedflib",
+    "pyqt6",  # for matplotlib GUI
+    "scikit-learn",
+    "wfdb",
+]

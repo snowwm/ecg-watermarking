@@ -1,11 +1,2 @@
 __pycache__
-.env
-/*
-
-!/.gitignore
-!/Code
-/Code/libs
-
-!/Data
-/Data/*
-!/Data/exp*
+.venv
